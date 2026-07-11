@@ -4,19 +4,24 @@ using ImageMagick;
 namespace ConvertAvif;
 
 /// <summary>
-/// 変換処理の進捗状況を表します。
+///     変換処理の進捗状況を表します。
 /// </summary>
-public record ConversionProgress(int TotalFiles, int ProcessedFiles, int SuccessfulFiles, int FailedFiles, string CurrentFile);
+public record ConversionProgress(
+    int TotalFiles,
+    int ProcessedFiles,
+    int SuccessfulFiles,
+    int FailedFiles,
+    string CurrentFile);
 
 /// <summary>
-/// 変換結果を表します。
+///     変換結果を表します。
 /// </summary>
 public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage);
 
 public static class ImageConverter
 {
     /// <summary>
-    /// 各種画像をAVIF形式に変換します。
+    ///     各種画像をAVIF形式に変換します。
     /// </summary>
     /// <param name="inputPath">入力ファイルのパス</param>
     /// <param name="outputPath">出力AVIFファイルのパス</param>
@@ -24,7 +29,8 @@ public static class ImageConverter
     /// <param name="colorSpace">色空間 または ピクセル形式 ("RGB", "YV12", "YUV444" など、または ColorSpace 列挙型の名前)</param>
     /// <param name="bitDepth">ビット深度 (指定しない場合は元の画像の設定を使用)</param>
     /// <param name="speed">速度 (0-10)</param>
-    public static void ConvertToAvif(string inputPath, string outputPath, int quality = 75, string? colorSpace = null, int? bitDepth = null, int? speed = null)
+    public static void ConvertToAvif(string inputPath, string outputPath, int quality = 75, string? colorSpace = null,
+        int? bitDepth = null, int? speed = null)
     {
         if (string.IsNullOrWhiteSpace(inputPath))
             throw new ArgumentException("Input path cannot be null or empty.", nameof(inputPath));
@@ -32,7 +38,7 @@ public static class ImageConverter
             throw new ArgumentException("Output path cannot be null or empty.", nameof(outputPath));
 
         using var image = new MagickImage(inputPath);
-        
+
         if (!string.IsNullOrWhiteSpace(colorSpace))
         {
             if (colorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
@@ -55,21 +61,15 @@ public static class ImageConverter
             }
         }
 
-        if (bitDepth.HasValue)
-        {
-            image.Depth = (uint)bitDepth.Value;
-        }
-        if (speed.HasValue)
-        {
-            image.Settings.SetDefine(MagickFormat.Avif, "speed", speed.Value.ToString());
-        }
+        if (bitDepth.HasValue) image.Depth = (uint)bitDepth.Value;
+        if (speed.HasValue) image.Settings.SetDefine(MagickFormat.Avif, "speed", speed.Value.ToString());
 
         image.Quality = (uint)quality;
         image.Write(outputPath, MagickFormat.Avif);
     }
 
     /// <summary>
-    /// 指定したフォルダ内の画像をAVIF形式に一括変換します。
+    ///     指定したフォルダ内の画像をAVIF形式に一括変換します。
     /// </summary>
     /// <param name="directoryPath">対象フォルダのパス</param>
     /// <param name="extensions">対象とする拡張子 (例: ".jpg", ".png")</param>
@@ -93,8 +93,10 @@ public static class ImageConverter
         var successCount = 0;
         var failedCount = 0;
 
-        var fileChannel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions{SingleWriter = true, SingleReader = false});
-        var resultChannel = Channel.CreateUnbounded<ConversionResult>(new UnboundedChannelOptions{SingleReader = true, SingleWriter = false});
+        var fileChannel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
+            { SingleWriter = true, SingleReader = false });
+        var resultChannel = Channel.CreateUnbounded<ConversionResult>(new UnboundedChannelOptions
+            { SingleReader = true, SingleWriter = false });
 
         // 探索ステージ
         var producerTask = Task.Run(async () =>
@@ -106,6 +108,7 @@ public static class ImageConverter
                 totalFiles++;
                 await fileChannel.Writer.WriteAsync(file, ct);
             }
+
             fileChannel.Writer.Complete();
         }, ct);
 
@@ -130,14 +133,16 @@ public static class ImageConverter
             if (result.IsSuccess) successCount++;
             else failedCount++;
 
-            progress?.Report(new ConversionProgress(totalFiles, processedCount, successCount, failedCount, result.InputPath));
+            progress?.Report(new ConversionProgress(totalFiles, processedCount, successCount, failedCount,
+                result.InputPath));
         }
 
         await producerTask;
         return allResults;
     }
 
-    private static ConversionResult ProcessFile(string inputPath, int quality, double ssimThreshold, CancellationToken ct)
+    private static ConversionResult ProcessFile(string inputPath, int quality, double ssimThreshold,
+        CancellationToken ct)
     {
         try
         {

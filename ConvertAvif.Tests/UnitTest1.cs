@@ -24,7 +24,7 @@ public class ImageConverterTests
 
             // Assert
             Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
-            
+
             // 出力ファイルが有効なAVIFであることを確認
             using (var avifImage = new MagickImage(avifPath))
             {
@@ -50,10 +50,10 @@ public class ImageConverterTests
         var tasks = new List<Task>();
         var testFiles = new List<(string Bmp, string Avif)>();
 
-        for (int i = 0; i < taskCount; i++)
+        for (var i = 0; i < taskCount; i++)
         {
-            string bmpPath = $"parallel_test_{i}.bmp";
-            string avifPath = $"parallel_test_{i}.avif";
+            var bmpPath = $"parallel_test_{i}.bmp";
+            var avifPath = $"parallel_test_{i}.avif";
             testFiles.Add((bmpPath, avifPath));
 
             // テスト用BMP作成
@@ -65,9 +65,7 @@ public class ImageConverterTests
         {
             // Act
             foreach (var file in testFiles)
-            {
                 tasks.Add(Task.Run(() => ImageConverter.ConvertToAvif(file.Bmp, file.Avif)));
-            }
 
             await Task.WhenAll(tasks);
 
@@ -107,7 +105,7 @@ public class ImageConverterTests
         try
         {
             // Act
-            ImageConverter.ConvertToAvif(bmpPath, avifPath, quality: 50, colorSpace: targetColorSpace, bitDepth: targetDepth);
+            ImageConverter.ConvertToAvif(bmpPath, avifPath, 50, targetColorSpace, targetDepth);
 
             // Assert
             Assert.True(File.Exists(avifPath));
@@ -131,8 +129,8 @@ public class ImageConverterTests
     public void ConvertToAvif_WithSpecificPixelFormats_ShouldCreateAvif(string pixelFormat)
     {
         // Arrange
-        string bmpPath = $"test_{pixelFormat}.bmp";
-        string avifPath = $"test_{pixelFormat}.avif";
+        var bmpPath = $"test_{pixelFormat}.bmp";
+        var avifPath = $"test_{pixelFormat}.avif";
 
         using (var image = new MagickImage(MagickColors.Blue, 10, 10))
         {
@@ -185,8 +183,8 @@ public class ImageConverterTests
             var results = await ImageConverter.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                quality: 50, // クオリティを少し上げる
-                ssimThreshold: 0.1, // しきい値をさらに下げる
+                50, // クオリティを少し上げる
+                0.1, // しきい値をさらに下げる
                 progress: progress);
 
             // Assert
@@ -196,7 +194,7 @@ public class ImageConverterTests
             Assert.False(File.Exists(file2), "Original file2 should be deleted.");
             Assert.True(File.Exists(Path.ChangeExtension(file1, ".avif")));
             Assert.True(File.Exists(Path.ChangeExtension(file2, ".avif")));
-            
+
             // 進捗通知の確認
             Assert.NotEmpty(progressList);
             Assert.Equal(2, progressList.Last().ProcessedFiles);
@@ -228,8 +226,8 @@ public class ImageConverterTests
             var results = await ImageConverter.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                quality: 1, // 極端に低クオリティにしてSSIMを下げる
-                ssimThreshold: 0.999); // 非常に高いしきい値
+                1, // 極端に低クオリティにしてSSIMを下げる
+                0.999); // 非常に高いしきい値
 
             // Assert
             Assert.Single(results);
