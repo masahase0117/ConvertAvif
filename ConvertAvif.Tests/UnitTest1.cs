@@ -155,4 +155,92 @@ public class ImageConverterTests
             if (File.Exists(avifPath)) File.Delete(avifPath);
         }
     }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_ValidFiles_ShouldConvertAndDeleteOriginals()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var subDir = Path.Combine(testDir, "sub");
+        Directory.CreateDirectory(subDir);
+
+        var file1 = Path.Combine(testDir, "image1.jpg");
+        var file2 = Path.Combine(subDir, "image2.jpg");
+
+        // JPGとして保存 (SSIM比較のために少し複雑な画像にする)
+        using (var img = new MagickImage(MagickColors.Red, 100, 100))
+        {
+            img.AddNoise(NoiseType.Gaussian);
+            img.Write(file1, MagickFormat.Jpg);
+            img.Write(file2, MagickFormat.Jpg);
+        }
+
+        var progressList = new List<ConversionProgress>();
+        var progress = new Progress<ConversionProgress>(p => progressList.Add(p));
+
+        try
+        {
+            // Act
+            var results = await ImageConverter.ConvertDirectoryToAvifAsync(
+                testDir,
+                new[] { ".jpg" },
+                quality: 50, // クオリティを少し上げる
+                ssimThreshold: 0.1, // しきい値をさらに下げる
+                progress: progress);
+
+            // Assert
+            Assert.Equal(2, results.Count);
+            Assert.All(results, r => Assert.True(r.IsSuccess, r.ErrorMessage));
+            Assert.False(File.Exists(file1), "Original file1 should be deleted.");
+            Assert.False(File.Exists(file2), "Original file2 should be deleted.");
+            Assert.True(File.Exists(Path.ChangeExtension(file1, ".avif")));
+            Assert.True(File.Exists(Path.ChangeExtension(file2, ".avif")));
+            
+            // 進捗通知の確認
+            Assert.NotEmpty(progressList);
+            Assert.Equal(2, progressList.Last().ProcessedFiles);
+            Assert.Equal(2, progressList.Last().TotalFiles);
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_LowSSIM_ShouldNotDeleteOriginal()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "low_ssim.jpg");
+
+        using (var img = new MagickImage(MagickColors.Green, 100, 100))
+        {
+            img.AddNoise(NoiseType.Impulse);
+            img.Write(file, MagickFormat.Jpg);
+        }
+
+        try
+        {
+            // Act
+            var results = await ImageConverter.ConvertDirectoryToAvifAsync(
+                testDir,
+                new[] { ".jpg" },
+                quality: 1, // 極端に低クオリティにしてSSIMを下げる
+                ssimThreshold: 0.999); // 非常に高いしきい値
+
+            // Assert
+            Assert.Single(results);
+            var result = results[0];
+            Assert.False(result.IsSuccess);
+            Assert.Contains("SSIM too low", result.ErrorMessage!);
+            Assert.True(File.Exists(file), "Original file should NOT be deleted due to low SSIM.");
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
+    }
 }
