@@ -180,12 +180,16 @@ public class ImageConverterTests
         try
         {
             // Act
-            var results = await ImageConverter.ConvertDirectoryToAvifAsync(
+            var results = new List<ConversionResult>();
+            await foreach (var result in ImageConverter.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
                 50, // クオリティを少し上げる
                 0.1, // しきい値をさらに下げる
-                progress: progress);
+                progress: progress))
+            {
+                results.Add(result);
+            }
 
             // Assert
             Assert.Equal(2, results.Count);
@@ -223,17 +227,21 @@ public class ImageConverterTests
         try
         {
             // Act
-            var results = await ImageConverter.ConvertDirectoryToAvifAsync(
+            var results = new List<ConversionResult>();
+            await foreach (var result in ImageConverter.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
                 1, // 極端に低クオリティにしてSSIMを下げる
-                0.999); // 非常に高いしきい値
+                0.999)) // 非常に高いしきい値
+            {
+                results.Add(result);
+            }
 
             // Assert
             Assert.Single(results);
-            var result = results[0];
-            Assert.False(result.IsSuccess);
-            Assert.Contains("SSIM too low", result.ErrorMessage!);
+            var firstResult = results[0];
+            Assert.False(firstResult.IsSuccess);
+            Assert.Contains("SSIM too low", firstResult.ErrorMessage!);
             Assert.True(File.Exists(file), "Original file should NOT be deleted due to low SSIM.");
         }
         finally

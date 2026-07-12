@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ImageMagick;
 
@@ -78,15 +79,15 @@ public static class ImageConverter
     /// <param name="maxDegreeOfParallelism">並列実行数</param>
     /// <param name="progress">進捗通知用の IProgress インターフェース</param>
     /// <param name="ct">キャンセル申告</param>
-    /// <returns>変換結果のリスト</returns>
-    public static async Task<List<ConversionResult>> ConvertDirectoryToAvifAsync(
+    /// <returns>変換結果の非同期ストリーム</returns>
+    public static async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
         string directoryPath,
         string[] extensions,
         int quality = 75,
         double ssimThreshold = 0.9,
         int maxDegreeOfParallelism = 4,
         IProgress<ConversionProgress>? progress = null,
-        CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var totalFiles = 0;
         var processedCount = 0;
@@ -124,21 +125,20 @@ public static class ImageConverter
 
         _ = Task.WhenAll(workerTasks).ContinueWith(_ => resultChannel.Writer.Complete(), ct);
 
-        // 結果集約ステージ
-        var allResults = new List<ConversionResult>();
+        // 結果集約ステージ (IAsyncEnumerableとして yield return する)
         await foreach (var result in resultChannel.Reader.ReadAllAsync(ct))
         {
-            allResults.Add(result);
             processedCount++;
             if (result.IsSuccess) successCount++;
             else failedCount++;
 
             progress?.Report(new ConversionProgress(totalFiles, processedCount, successCount, failedCount,
                 result.InputPath));
+
+            yield return result;
         }
 
         await producerTask;
-        return allResults;
     }
 
     private static ConversionResult ProcessFile(string inputPath, int quality, double ssimThreshold,
