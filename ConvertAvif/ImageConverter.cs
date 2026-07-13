@@ -19,19 +19,86 @@ public record ConversionProgress(
 /// </summary>
 public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage);
 
-public static class ImageConverter
+public class ImageConverter
 {
+    /// <summary>
+    /// クオリティ (0-100)
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public uint Quality
+    {
+        get;
+        set
+        {
+            if (value > 100)
+                throw new ArgumentOutOfRangeException(nameof(Quality), "Quality must be between 0 and 100.");
+            field = value;
+        }
+    } = 75;
+
+    /// <summary>
+    /// ビット深度 (指定しない場合は元の画像の設定を使用)
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public uint? BitDepth
+    {
+        get;
+        set
+        {
+            if (value != 8 && value != 10 && value != 12 && value != null)
+                throw new ArgumentOutOfRangeException(nameof(BitDepth), "Bit depth must be 8, 10, or 12.");
+            field = value;
+        }
+    } = null;
+
+    /// <summary>
+    /// 速度 (0-10)
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public uint? Speed
+    {
+        get;
+        set
+        {
+            if (value > 10)
+                throw new ArgumentOutOfRangeException(nameof(Speed), "Speed must be between 0 and 10.");
+            field = value;
+        }
+    } = null;
+
+    /// <summary>
+    /// 色空間 または ピクセル形式 ("RGB", "YV12", "YUV444" など、または ColorSpace 列挙型の名前)
+    /// </summary>
+    /// <exception cref="ArgumentException"></exception>
+    public string? ColorSpace { get;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                if (value.Equals("YV12", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("YUV444", StringComparison.OrdinalIgnoreCase) ||
+                    Enum.TryParse<ImageMagick.ColorSpace>(value, true, out var _))
+                {
+                    field = value;
+                }
+                else
+                {
+                    throw new ArgumentException($"Invalid color space or pixel format: {value}", nameof(value));
+                }
+            }
+            else
+            {
+                field=value;
+            }
+        } } = null;
+
+
     /// <summary>
     ///     各種画像をAVIF形式に変換します。
     /// </summary>
     /// <param name="inputPath">入力ファイルのパス</param>
     /// <param name="outputPath">出力AVIFファイルのパス</param>
-    /// <param name="quality">クオリティ (0-100)</param>
-    /// <param name="colorSpace">色空間 または ピクセル形式 ("RGB", "YV12", "YUV444" など、または ColorSpace 列挙型の名前)</param>
-    /// <param name="bitDepth">ビット深度 (指定しない場合は元の画像の設定を使用)</param>
-    /// <param name="speed">速度 (0-10)</param>
-    public static void ConvertToAvif(string inputPath, string outputPath, int quality = 75, string? colorSpace = null,
-        int? bitDepth = null, int? speed = null)
+    public void ConvertToAvif(string inputPath, string outputPath)
     {
         if (string.IsNullOrWhiteSpace(inputPath))
             throw new ArgumentException("Input path cannot be null or empty.", nameof(inputPath));
@@ -40,32 +107,28 @@ public static class ImageConverter
 
         using var image = new MagickImage(inputPath);
 
-        if (!string.IsNullOrWhiteSpace(colorSpace))
+        if (!string.IsNullOrWhiteSpace(ColorSpace))
         {
-            if (colorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
+            if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
             {
-                image.ColorSpace = ColorSpace.YUV;
+                image.ColorSpace = ImageMagick.ColorSpace.YUV;
                 image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:2:0");
             }
-            else if (colorSpace.Equals("YUV444", StringComparison.OrdinalIgnoreCase))
+            else if (ColorSpace.Equals("YUV444", StringComparison.OrdinalIgnoreCase))
             {
-                image.ColorSpace = ColorSpace.YUV;
+                image.ColorSpace = ImageMagick.ColorSpace.YUV;
                 image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:4:4");
             }
-            else if (Enum.TryParse<ColorSpace>(colorSpace, true, out var parsedColorSpace))
+            else if (Enum.TryParse<ColorSpace>(ColorSpace, true, out var parsedColorSpace))
             {
                 image.ColorSpace = parsedColorSpace;
             }
-            else
-            {
-                throw new ArgumentException($"Invalid color space or pixel format: {colorSpace}", nameof(colorSpace));
-            }
         }
 
-        if (bitDepth.HasValue) image.Depth = (uint)bitDepth.Value;
-        if (speed.HasValue) image.Settings.SetDefine(MagickFormat.Avif, "speed", speed.Value.ToString());
+        if (BitDepth.HasValue) image.Depth = BitDepth.Value;
+        if (Speed.HasValue) image.Settings.SetDefine(MagickFormat.Avif, "speed", Speed.Value.ToString());
 
-        image.Quality = (uint)quality;
+        image.Quality = Quality;
         image.Write(outputPath, MagickFormat.Avif);
     }
 
@@ -74,16 +137,14 @@ public static class ImageConverter
     /// </summary>
     /// <param name="directoryPath">対象フォルダのパス</param>
     /// <param name="extensions">対象とする拡張子 (例: ".jpg", ".png")</param>
-    /// <param name="quality">変換クオリティ</param>
     /// <param name="ssimThreshold">SSIMのしきい値 (0.0 - 1.0)</param>
     /// <param name="maxDegreeOfParallelism">並列実行数</param>
     /// <param name="progress">進捗通知用の IProgress インターフェース</param>
     /// <param name="ct">キャンセル申告</param>
     /// <returns>変換結果の非同期ストリーム</returns>
-    public static async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
+    public async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
         string directoryPath,
         string[] extensions,
-        int quality = 75,
         double ssimThreshold = 0.9,
         int maxDegreeOfParallelism = 4,
         IProgress<ConversionProgress>? progress = null,
@@ -118,7 +179,7 @@ public static class ImageConverter
         {
             await foreach (var inputFile in fileChannel.Reader.ReadAllAsync(ct))
             {
-                var result = ProcessFile(inputFile, quality, ssimThreshold, ct);
+                var result = ProcessFile(inputFile, ssimThreshold, ct);
                 await resultChannel.Writer.WriteAsync(result, ct);
             }
         }, ct)).ToArray();
@@ -141,7 +202,7 @@ public static class ImageConverter
         await producerTask;
     }
 
-    private static ConversionResult ProcessFile(string inputPath, int quality, double ssimThreshold,
+    private ConversionResult ProcessFile(string inputPath, double ssimThreshold,
         CancellationToken ct)
     {
         try
@@ -150,7 +211,7 @@ public static class ImageConverter
             var outputPath = Path.ChangeExtension(inputPath, ".avif");
 
             // 1. 変換
-            ConvertToAvif(inputPath, outputPath, quality);
+            ConvertToAvif(inputPath, outputPath);
 
             // 2. 検証
             using var original = new MagickImage(inputPath);

@@ -19,8 +19,9 @@ public class ImageConverterTests
 
         try
         {
+            var ic = new ImageConverter();
             // Act
-            ImageConverter.ConvertToAvif(bmpPath, avifPath);
+            ic.ConvertToAvif(bmpPath, avifPath);
 
             // Assert
             Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
@@ -49,6 +50,7 @@ public class ImageConverterTests
         const int taskCount = 10;
         var tasks = new List<Task>();
         var testFiles = new List<(string Bmp, string Avif)>();
+        var ic = new ImageConverter();
 
         for (var i = 0; i < taskCount; i++)
         {
@@ -65,7 +67,7 @@ public class ImageConverterTests
         {
             // Act
             foreach (var file in testFiles)
-                tasks.Add(Task.Run(() => ImageConverter.ConvertToAvif(file.Bmp, file.Avif)));
+                tasks.Add(Task.Run(() => ic.ConvertToAvif(file.Bmp, file.Avif)));
 
             await Task.WhenAll(tasks);
 
@@ -105,7 +107,13 @@ public class ImageConverterTests
         try
         {
             // Act
-            ImageConverter.ConvertToAvif(bmpPath, avifPath, 50, targetColorSpace, targetDepth);
+            var ic = new ImageConverter
+            {
+                Quality = 50,
+                ColorSpace = targetColorSpace,
+                BitDepth = targetDepth
+            };
+            ic.ConvertToAvif(bmpPath, avifPath);
 
             // Assert
             Assert.True(File.Exists(avifPath));
@@ -140,7 +148,9 @@ public class ImageConverterTests
         try
         {
             // Act
-            ImageConverter.ConvertToAvif(bmpPath, avifPath, colorSpace: pixelFormat);
+            var ic = new ImageConverter();
+            ic.ColorSpace = pixelFormat;
+            ic.ConvertToAvif(bmpPath, avifPath);
 
             // Assert
             Assert.True(File.Exists(avifPath), $"Output AVIF for {pixelFormat} should exist.");
@@ -181,10 +191,11 @@ public class ImageConverterTests
         {
             // Act
             var results = new List<ConversionResult>();
-            await foreach (var result in ImageConverter.ConvertDirectoryToAvifAsync(
+            var ic = new ImageConverter();
+            ic.Quality = 50;
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                50, // クオリティを少し上げる
                 0.1, // しきい値をさらに下げる
                 progress: progress))
             {
@@ -228,10 +239,11 @@ public class ImageConverterTests
         {
             // Act
             var results = new List<ConversionResult>();
-            await foreach (var result in ImageConverter.ConvertDirectoryToAvifAsync(
+            var ic = new ImageConverter();
+            ic.Quality = 1; // 極端に低クオリティにしてSSIMを下げる
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                1, // 極端に低クオリティにしてSSIMを下げる
                 0.999)) // 非常に高いしきい値
             {
                 results.Add(result);
