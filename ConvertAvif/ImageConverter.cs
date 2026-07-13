@@ -77,7 +77,7 @@ public class ImageConverter
             {
                 if (value.Equals("YV12", StringComparison.OrdinalIgnoreCase) ||
                     value.Equals("YUV444", StringComparison.OrdinalIgnoreCase) ||
-                    Enum.TryParse<ColorSpace>(value, true, out var _))
+                    Enum.TryParse<ColorSpace>(value, true, out _))
                 {
                     field = value;
                 }
