@@ -261,4 +261,86 @@ public class ImageConverterTests
             if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
         }
     }
+    [Theory]
+    [InlineData("avifenc_v1.2.0.exe")]
+    [InlineData("avifenc_v1.3.0.exe")]
+    [InlineData("avifenc_v1.4.0.exe")]
+    [InlineData("avifenc_v1.4.2.exe")]
+    public void ConvertToAvifWithAvifEnc_MultipleVersions_ShouldCreateAvif(string avifEncExe)
+    {
+        // Arrange
+        const string pngPath = "test_avifenc.png";
+        const string avifPath = "test_avifenc.avif";
+        // テストプロジェクトのディレクトリにあるavifencを使用する
+        string avifEncPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, avifEncExe);
+
+        // テスト用PNG画像を作成 (avifencはPNGをサポート)
+        using (var image = new MagickImage(MagickColors.Red, 10, 10))
+        {
+            image.Write(pngPath, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                AvifEncPath = avifEncPath,
+                Quality = 60,
+                Speed = 8
+            };
+
+            // Act
+            ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
+
+            // Assert
+            Assert.True(File.Exists(avifPath), $"Output AVIF file should exist for {avifEncExe}.");
+
+            using (var avifImage = new MagickImage(avifPath))
+            {
+                Assert.Equal(10, (int)avifImage.Width);
+                Assert.Equal(10, (int)avifImage.Height);
+                Assert.Equal(MagickFormat.Avif, avifImage.Format);
+            }
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(pngPath)) File.Delete(pngPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
+
+    [Fact]
+    public void ConvertToAvifWithAvifEnc_WithCustomOptions_ShouldPassOptionsToAvifEnc()
+    {
+        // Arrange
+        const string pngPath = "test_custom.png";
+        const string avifPath = "test_custom.avif";
+        string avifEncPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "avifenc_v1.4.2.exe");
+
+        using (var image = new MagickImage(MagickColors.Cyan, 10, 10))
+        {
+            image.Write(pngPath, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                AvifEncPath = avifEncPath,
+                AvifEncCustomOptions = "--tilecolslog2 1 --tilerowslog2 1"
+            };
+
+            // Act
+            ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
+
+            // Assert
+            Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
+        }
+        finally
+        {
+            if (File.Exists(pngPath)) File.Delete(pngPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
 }

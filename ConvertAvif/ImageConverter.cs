@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 using ImageMagick;
 
 namespace ConvertAvif;
@@ -19,7 +21,7 @@ public record ConversionProgress(
 /// </summary>
 public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage);
 
-public class ImageConverter
+public partial class ImageConverter
 {
     /// <summary>
     /// クオリティ (0-100)
@@ -92,6 +94,16 @@ public class ImageConverter
             }
         } } = null;
 
+    /// <summary>
+    /// avifencのパス
+    /// </summary>
+    public string? AvifEncPath { get; set; }
+
+    /// <summary>
+    /// avifencのカスタムオプション
+    /// </summary>
+    public string? AvifEncCustomOptions { get; set; }
+
 
     /// <summary>
     ///     各種画像をAVIF形式に変換します。
@@ -130,6 +142,137 @@ public class ImageConverter
 
         image.Quality = Quality;
         image.Write(outputPath, MagickFormat.Avif);
+    }
+
+    /// <summary>
+    ///     avifenc を利用して各種画像をAVIF形式に変換します。
+    /// </summary>
+    /// <param name="inputPath">入力ファイルのパス</param>
+    /// <param name="outputPath">出力AVIFファイルのパス</param>
+    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="FileNotFoundException"></exception>
+    public void ConvertToAvifWithAvifEnc(string inputPath, string outputPath)
+    {
+        if (string.IsNullOrWhiteSpace(inputPath))
+            throw new ArgumentException("Input path cannot be null or empty.", nameof(inputPath));
+        if (string.IsNullOrWhiteSpace(outputPath))
+            throw new ArgumentException("Output path cannot be null or empty.", nameof(outputPath));
+        if (string.IsNullOrWhiteSpace(AvifEncPath))
+            throw new InvalidOperationException("avifenc path is not set.");
+        if (!File.Exists(AvifEncPath))
+            throw new FileNotFoundException("avifenc not found.", AvifEncPath);
+
+        var version = GetAvifEncVersion(AvifEncPath);
+        var arguments = BuildAvifEncArguments(version, inputPath, outputPath);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = AvifEncPath,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start avifenc.");
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            var error = process.StandardError.ReadToEnd();
+            throw new InvalidOperationException($"avifenc failed with exit code {process.ExitCode}. Error: {error}");
+        }
+    }
+
+    private static string GetAvifEncVersion(string path)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = path,
+            Arguments = "--version",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start avifenc to check version.");
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        // Version: 1.4.2 (dav1d [dec]:1.5.3-0-gb546257, aom [enc]:3.14.1)
+        var match = MyRegex().Match(output);
+        return match.Success ? match.Groups[1].Value : "0.0.0";
+    }
+
+    private string BuildAvifEncArguments(string version, string inputPath, string outputPath)
+    {
+        var args = new List<string>();
+
+        // Version comparison
+        var v = Version.Parse(version);
+        var isV140OrNewer = v >= new Version(1, 4, 0);
+
+        // Quality
+        args.Add("-q");
+        args.Add(Quality.ToString());
+
+        // Speed
+        if (Speed.HasValue)
+        {
+            args.Add("-s");
+            args.Add(Speed.Value.ToString());
+        }
+
+        // Bit Depth
+        if (BitDepth.HasValue)
+        {
+            args.Add("-d");
+            args.Add(BitDepth.Value.ToString());
+        }
+
+        // Color Space / YUV Format
+        if (!string.IsNullOrWhiteSpace(ColorSpace))
+        {
+            args.Add("-y");
+            if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add("420");
+            }
+            else if (ColorSpace.Equals("YUV444", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add("444");
+            }
+            else
+            {
+                // avifenc accepts 444, 422, 420, 400
+                if (ColorSpace.Contains("444")) args.Add("444");
+                else if (ColorSpace.Contains("422")) args.Add("422");
+                else if (ColorSpace.Contains("420")) args.Add("420");
+                else if (ColorSpace.Contains("400")) args.Add("400");
+                else args.Add("auto");
+            }
+        }
+
+        // Example of version-specific difference
+        // If we wanted to use something like 'iq' tuning which was added later
+        if (isV140OrNewer)
+        {
+            // In 1.4.0+, we might want to default to 'iq' for better quality if not specified
+            // but for now we follow the issue description's focus on basic compatibility
+        }
+
+        // Custom Options
+        if (!string.IsNullOrWhiteSpace(AvifEncCustomOptions))
+        {
+            args.Add(AvifEncCustomOptions);
+        }
+
+        args.Add($"\"{inputPath}\"");
+        args.Add($"\"{outputPath}\"");
+
+        return string.Join(" ", args);
     }
 
     /// <summary>
@@ -257,4 +400,7 @@ public class ImageConverter
             return new ConversionResult(inputPath, false, ex.Message);
         }
     }
+
+    [GeneratedRegex(@"Version:\s*(\d+\.\d+\.\d+)")]
+    private static partial Regex MyRegex();
 }

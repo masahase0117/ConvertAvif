@@ -29,4 +29,19 @@
         <ProjectReference Include="..\ConvertAvif\ConvertAvif.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+      <None Update="avifenc_v1.2.0.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="avifenc_v1.3.0.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="avifenc_v1.4.0.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="avifenc_v1.4.2.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>
