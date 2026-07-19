@@ -392,7 +392,16 @@ public partial class ImageConverter
             // 1. 変換
             if (engine == AvifConversionEngine.AvifEnc)
             {
-                ConvertToAvifWithAvifEnc(inputPath, outputPath);
+                try
+                {
+                    ConvertToAvifWithAvifEnc(inputPath, outputPath);
+                }
+                catch (Exception ex)
+                {
+                    // avifenc が失敗した場合は Magick.NET にフォールバック
+                    Console.WriteLine($"[Info] avifenc failed, falling back to Magick.NET: {ex.Message}");
+                    ConvertToAvif(inputPath, outputPath);
+                }
             }
             else
             {

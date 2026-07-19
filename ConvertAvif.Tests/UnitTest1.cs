@@ -421,4 +421,45 @@ public class ImageConverterTests
             if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
         }
     }
+    [Fact]
+    public async Task ProcessFile_AvifEncFails_ShouldFallbackToMagick()
+    {
+        // Arrange
+        const string pngPath = "test_fallback.png";
+        const string avifPath = "test_fallback.avif";
+        
+        // 10x10の画像だとSSIMが不安定な場合があるため、少し大きくする
+        using (var image = new MagickImage(MagickColors.Green, 100, 100))
+        {
+            image.Write(pngPath, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                // 無効なパスを設定して失敗を誘発
+                AvifEncPath = "non_existent_avifenc.exe",
+                ConversionEngine = AvifConversionEngine.AvifEnc
+            };
+
+            // ProcessFile はプライベートなので、間接的に ConvertDirectoryToAvifAsync かリフレクションを使う
+            // ここではテストの利便性のためにリフレクションを使用する
+            var method = typeof(ImageConverter).GetMethod("ProcessFile", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            // Act
+            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, 0.0, AvifConversionEngine.AvifEnc, CancellationToken.None });
+
+            // Assert
+            Assert.True(result.IsSuccess, $"Conversion should succeed via fallback. Error: {result.ErrorMessage}");
+            Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
+            Assert.False(File.Exists(pngPath), "Original PNG should be deleted on success.");
+        }
+        finally
+        {
+            if (File.Exists(pngPath)) File.Delete(pngPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
 }
