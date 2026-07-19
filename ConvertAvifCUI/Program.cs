@@ -17,7 +17,7 @@ static class Program
         var extensionsOption = new Option<string[]>(
             name: "--extensions",
             description: "対象とする拡張子 (例: .jpg .png)",
-            getDefaultValue: () => new[] { ".jpg", ".jpeg", ".png" });
+            getDefaultValue: () => [".jpg", ".jpeg", ".png"]);
         extensionsOption.AddAlias("-e");
 
         var qualityOption = new Option<uint>(
@@ -74,7 +74,7 @@ static class Program
         rootCommand.SetHandler(async (context) =>
         {
             var dir = context.ParseResult.GetValueForArgument(dirArgument);
-            var extensions = context.ParseResult.GetValueForOption(extensionsOption) ?? new[] { ".jpg", ".jpeg", ".png" };
+            var extensions = context.ParseResult.GetValueForOption(extensionsOption) ?? [".jpg", ".jpeg", ".png"];
             var quality = context.ParseResult.GetValueForOption(qualityOption);
             var ssim = context.ParseResult.GetValueForOption(ssimOption);
             var parallel = context.ParseResult.GetValueForOption(parallelOption);
@@ -118,7 +118,7 @@ static class Program
                 ssimThreshold: ssim, 
                 maxDegreeOfParallelism: parallel,
                 progress: progress,
-                ct: context.ExitCode == 0 ? default : default)) // ダミーのct、実際にはcontextから取得できるならそれが良い
+                ct: CancellationToken.None)) // ダミーのct、実際にはcontextから取得できるならそれが良い
             {
                 if (!result.IsSuccess)
                 {
