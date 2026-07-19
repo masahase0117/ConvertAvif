@@ -1,4 +1,5 @@
 ﻿using System.CommandLine;
+using System.Diagnostics;
 using ConvertAvif;
 
 namespace ConvertAvifCUI;
@@ -54,6 +55,11 @@ static class Program
             name: "--avifenc",
             description: "avifencのパス");
 
+        var priorityOption = new Option<ProcessPriorityClass>(
+            name: "--priority",
+            description: "avifenc実行時のプロセス優先度 (Normal, Idle, High, RealTime, BelowNormal, AboveNormal)",
+            getDefaultValue: () => ProcessPriorityClass.Normal);
+
         rootCommand.AddArgument(dirArgument);
         rootCommand.AddOption(extensionsOption);
         rootCommand.AddOption(qualityOption);
@@ -63,6 +69,7 @@ static class Program
         rootCommand.AddOption(depthOption);
         rootCommand.AddOption(engineOption);
         rootCommand.AddOption(avifencPathOption);
+        rootCommand.AddOption(priorityOption);
 
         rootCommand.SetHandler(async (context) =>
         {
@@ -75,6 +82,7 @@ static class Program
             var depth = context.ParseResult.GetValueForOption(depthOption);
             var engine = context.ParseResult.GetValueForOption(engineOption);
             var avifencPath = context.ParseResult.GetValueForOption(avifencPathOption);
+            var priority = context.ParseResult.GetValueForOption(priorityOption);
 
             var converter = new ImageConverter
             {
@@ -82,7 +90,8 @@ static class Program
                 Speed = speed,
                 BitDepth = depth,
                 ConversionEngine = engine,
-                AvifEncPath = avifencPath
+                AvifEncPath = avifencPath,
+                AvifEncPriority = priority
             };
 
             Console.WriteLine($"ディレクトリ: {dir.FullName}");
@@ -93,6 +102,7 @@ static class Program
             if (engine == AvifConversionEngine.AvifEnc)
             {
                 Console.WriteLine($"avifencパス: {avifencPath ?? "未指定 (パスが通っている必要があります)"}");
+                Console.WriteLine($"プロセス優先度: {priority}");
             }
             Console.WriteLine("変換を開始します...");
 

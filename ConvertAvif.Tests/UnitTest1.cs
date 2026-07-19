@@ -343,6 +343,41 @@ public class ImageConverterTests
             if (File.Exists(avifPath)) File.Delete(avifPath);
         }
     }
+
+    [Fact]
+    public void ConvertToAvifWithAvifEnc_WithPriority_ShouldNotThrow()
+    {
+        // Arrange
+        const string pngPath = "test_priority.png";
+        const string avifPath = "test_priority.avif";
+        string avifEncPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "avifenc_v1.4.2.exe");
+
+        using (var image = new MagickImage(MagickColors.Yellow, 10, 10))
+        {
+            image.Write(pngPath, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                AvifEncPath = avifEncPath,
+                AvifEncPriority = System.Diagnostics.ProcessPriorityClass.BelowNormal
+            };
+
+            // Act & Assert
+            // 優先度の設定自体が例外を投げないことを確認しつつ、変換が成功することを確認
+            var exception = Record.Exception(() => ic.ConvertToAvifWithAvifEnc(pngPath, avifPath));
+            Assert.Null(exception);
+            Assert.True(File.Exists(avifPath));
+        }
+        finally
+        {
+            if (File.Exists(pngPath)) File.Delete(pngPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
+
     [Fact]
     public async Task ConvertDirectoryToAvifAsync_WithAvifEnc_ShouldConvertAndDeleteOriginals()
     {

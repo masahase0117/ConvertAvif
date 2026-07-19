@@ -125,6 +125,11 @@ public partial class ImageConverter
     /// </summary>
     public string? AvifEncCustomOptions { get; set; }
 
+    /// <summary>
+    /// avifenc実行時のプロセス優先度
+    /// </summary>
+    public ProcessPriorityClass AvifEncPriority { get; set; } = ProcessPriorityClass.Normal;
+
 
     /// <summary>
     ///     各種画像をAVIF形式に変換します。
@@ -197,6 +202,15 @@ public partial class ImageConverter
         };
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start avifenc.");
+        try
+        {
+            process.PriorityClass = AvifEncPriority;
+        }
+        catch (Exception ex)
+        {
+            // 優先度の設定に失敗しても、変換自体は続行を試みる
+            Console.WriteLine($"[Warning] Failed to set process priority: {ex.Message}");
+        }
         process.WaitForExit();
 
         if (process.ExitCode != 0)
