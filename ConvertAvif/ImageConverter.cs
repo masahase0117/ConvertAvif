@@ -21,8 +21,29 @@ public record ConversionProgress(
 /// </summary>
 public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage);
 
+/// <summary>
+///     変換エンジンの種類を表します。
+/// </summary>
+public enum AvifConversionEngine
+{
+    /// <summary>
+    /// ImageMagick を使用します。
+    /// </summary>
+    Magick,
+
+    /// <summary>
+    /// avifenc を使用します。
+    /// </summary>
+    AvifEnc
+}
+
 public partial class ImageConverter
 {
+    /// <summary>
+    /// 使用する変換エンジン
+    /// </summary>
+    public AvifConversionEngine ConversionEngine { get; set; } = AvifConversionEngine.Magick;
+
     /// <summary>
     /// クオリティ (0-100)
     /// </summary>
@@ -322,7 +343,7 @@ public partial class ImageConverter
         {
             await foreach (var inputFile in fileChannel.Reader.ReadAllAsync(ct))
             {
-                var result = ProcessFile(inputFile, ssimThreshold, ct);
+                var result = ProcessFile(inputFile, ssimThreshold, ConversionEngine, ct);
                 await resultChannel.Writer.WriteAsync(result, ct);
             }
         }, ct)).ToArray();
@@ -346,6 +367,7 @@ public partial class ImageConverter
     }
 
     private ConversionResult ProcessFile(string inputPath, double ssimThreshold,
+        AvifConversionEngine engine,
         CancellationToken ct)
     {
         try
@@ -354,7 +376,14 @@ public partial class ImageConverter
             var outputPath = Path.ChangeExtension(inputPath, ".avif");
 
             // 1. 変換
-            ConvertToAvif(inputPath, outputPath);
+            if (engine == AvifConversionEngine.AvifEnc)
+            {
+                ConvertToAvifWithAvifEnc(inputPath, outputPath);
+            }
+            else
+            {
+                ConvertToAvif(inputPath, outputPath);
+            }
 
             // 2. 検証
             using var original = new MagickImage(inputPath);

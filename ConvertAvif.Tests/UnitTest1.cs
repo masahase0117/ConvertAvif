@@ -343,4 +343,47 @@ public class ImageConverterTests
             if (File.Exists(avifPath)) File.Delete(avifPath);
         }
     }
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_WithAvifEnc_ShouldConvertAndDeleteOriginals()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "image.png");
+        string avifEncPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "avifenc_v1.4.2.exe");
+
+        using (var img = new MagickImage(MagickColors.Red, 200, 200))
+        {
+            img.AddNoise(NoiseType.Gaussian);
+            img.Write(file, MagickFormat.Png);
+        }
+
+        try
+        {
+            // Act
+            var results = new List<ConversionResult>();
+            var ic = new ImageConverter
+            {
+                AvifEncPath = avifEncPath,
+                ConversionEngine = AvifConversionEngine.AvifEnc
+            };
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(
+                testDir,
+                new[] { ".png" },
+                0.01))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Single(results);
+            Assert.True(results[0].IsSuccess, results[0].ErrorMessage);
+            Assert.False(File.Exists(file), "Original file should be deleted.");
+            Assert.True(File.Exists(Path.ChangeExtension(file, ".avif")));
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
+    }
 }

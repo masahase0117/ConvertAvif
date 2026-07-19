@@ -45,6 +45,15 @@ static class Program
             name: "--depth",
             description: "ビット深度 (8, 10, 12)");
 
+        var engineOption = new Option<AvifConversionEngine>(
+            name: "--engine",
+            description: "使用する変換エンジン",
+            getDefaultValue: () => AvifConversionEngine.Magick);
+
+        var avifencPathOption = new Option<string?>(
+            name: "--avifenc",
+            description: "avifencのパス");
+
         rootCommand.AddArgument(dirArgument);
         rootCommand.AddOption(extensionsOption);
         rootCommand.AddOption(qualityOption);
@@ -52,20 +61,39 @@ static class Program
         rootCommand.AddOption(parallelOption);
         rootCommand.AddOption(speedOption);
         rootCommand.AddOption(depthOption);
+        rootCommand.AddOption(engineOption);
+        rootCommand.AddOption(avifencPathOption);
 
-        rootCommand.SetHandler(async (dir, extensions, quality, ssim, parallel, speed, depth) =>
+        rootCommand.SetHandler(async (context) =>
         {
+            var dir = context.ParseResult.GetValueForArgument(dirArgument);
+            var extensions = context.ParseResult.GetValueForOption(extensionsOption) ?? new[] { ".jpg", ".jpeg", ".png" };
+            var quality = context.ParseResult.GetValueForOption(qualityOption);
+            var ssim = context.ParseResult.GetValueForOption(ssimOption);
+            var parallel = context.ParseResult.GetValueForOption(parallelOption);
+            var speed = context.ParseResult.GetValueForOption(speedOption);
+            var depth = context.ParseResult.GetValueForOption(depthOption);
+            var engine = context.ParseResult.GetValueForOption(engineOption);
+            var avifencPath = context.ParseResult.GetValueForOption(avifencPathOption);
+
             var converter = new ImageConverter
             {
                 Quality = quality,
                 Speed = speed,
-                BitDepth = depth
+                BitDepth = depth,
+                ConversionEngine = engine,
+                AvifEncPath = avifencPath
             };
 
             Console.WriteLine($"ディレクトリ: {dir.FullName}");
             Console.WriteLine($"拡張子: {string.Join(", ", extensions)}");
             Console.WriteLine($"クオリティ: {quality}");
             Console.WriteLine($"SSIMしきい値: {ssim}");
+            Console.WriteLine($"エンジン: {engine}");
+            if (engine == AvifConversionEngine.AvifEnc)
+            {
+                Console.WriteLine($"avifencパス: {avifencPath ?? "未指定 (パスが通っている必要があります)"}");
+            }
             Console.WriteLine("変換を開始します...");
 
             var progress = new Progress<ConversionProgress>(p =>
@@ -79,7 +107,8 @@ static class Program
                 extensions, 
                 ssimThreshold: ssim, 
                 maxDegreeOfParallelism: parallel,
-                progress: progress))
+                progress: progress,
+                ct: context.ExitCode == 0 ? default : default)) // ダミーのct、実際にはcontextから取得できるならそれが良い
             {
                 if (!result.IsSuccess)
                 {
@@ -88,7 +117,7 @@ static class Program
             }
 
             Console.WriteLine("\n完了しました。");
-        }, dirArgument, extensionsOption, qualityOption, ssimOption, parallelOption, speedOption, depthOption);
+        });
 
         return await rootCommand.InvokeAsync(args);
     }
