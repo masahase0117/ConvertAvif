@@ -55,6 +55,10 @@ static class Program
             name: "--avifenc",
             description: "avifencのパス");
 
+        var avifencOptionsOption = new Option<string?>(
+            name: "--avifenc-options",
+            description: "avifencのカスタムオプション");
+
         var priorityOption = new Option<ProcessPriorityClass>(
             name: "--priority",
             description: "avifenc実行時のプロセス優先度 (Normal, Idle, High, RealTime, BelowNormal, AboveNormal)",
@@ -69,6 +73,7 @@ static class Program
         rootCommand.AddOption(depthOption);
         rootCommand.AddOption(engineOption);
         rootCommand.AddOption(avifencPathOption);
+        rootCommand.AddOption(avifencOptionsOption);
         rootCommand.AddOption(priorityOption);
 
         rootCommand.SetHandler(async (context) =>
@@ -82,6 +87,7 @@ static class Program
             var depth = context.ParseResult.GetValueForOption(depthOption);
             var engine = context.ParseResult.GetValueForOption(engineOption);
             var avifencPath = context.ParseResult.GetValueForOption(avifencPathOption);
+            var avifencOptions = context.ParseResult.GetValueForOption(avifencOptionsOption);
             var priority = context.ParseResult.GetValueForOption(priorityOption);
 
             var converter = new ImageConverter
@@ -91,6 +97,7 @@ static class Program
                 BitDepth = depth,
                 ConversionEngine = engine,
                 AvifEncPath = avifencPath,
+                AvifEncCustomOptions = avifencOptions,
                 AvifEncPriority = priority
             };
 
@@ -102,6 +109,7 @@ static class Program
             if (engine == AvifConversionEngine.AvifEnc)
             {
                 Console.WriteLine($"avifencパス: {avifencPath ?? "未指定 (パスが通っている必要があります)"}");
+                Console.WriteLine($"avifencカスタムオプション: {avifencOptions ?? "未指定"}");
                 Console.WriteLine($"プロセス優先度: {priority}");
             }
             Console.WriteLine("変換を開始します...");
