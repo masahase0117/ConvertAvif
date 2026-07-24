@@ -5,6 +5,35 @@ namespace ConvertAvif.Tests;
 public class ImageConverterTests
 {
     [Fact]
+    public void SSIM_IdenticalImages_ShouldReturnOne()
+    {
+        // Arrange
+        using var image1 = new MagickImage(MagickColors.Red, 100, 100);
+        using var image2 = new MagickImage(MagickColors.Red, 100, 100);
+
+        // Act
+        // ライブラリ側で 1.0 - distortion とするようにしたので、一致なら 1.0
+        var ssim = 1.0 - image1.Compare(image2, ErrorMetric.StructuralSimilarity);
+
+        // Assert
+        Assert.Equal(1.0, ssim);
+    }
+
+    [Fact]
+    public void SSIM_DifferentImages_ShouldReturnLessThanOne()
+    {
+        // Arrange
+        using var image1 = new MagickImage(MagickColors.Red, 100, 100);
+        using var image2 = new MagickImage(MagickColors.Blue, 100, 100);
+
+        // Act
+        var ssim = 1.0 - image1.Compare(image2, ErrorMetric.StructuralSimilarity);
+
+        // Assert
+        Assert.True(ssim < 1.0, $"SSIM should be less than 1.0 for different images, but was {ssim}");
+    }
+
+    [Fact]
     public void ConvertToAvif_ValidBmp_ShouldCreateAvif()
     {
         // Arrange
@@ -196,7 +225,7 @@ public class ImageConverterTests
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                0.1, // しきい値をさらに下げる
+                0.1, // しきい値を下げる（1.0が完全一致なので、0.1以上なら成功）
                 progress: progress))
             {
                 results.Add(result);
@@ -244,7 +273,7 @@ public class ImageConverterTests
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                0.999)) // 非常に高いしきい値
+                0.999)) // 非常に高いしきい値(1.0に近い値なので、少しでも劣化すると失敗)
             {
                 results.Add(result);
             }
@@ -405,7 +434,7 @@ public class ImageConverterTests
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".png" },
-                0.01))
+                0.1))
             {
                 results.Add(result);
             }
@@ -449,7 +478,7 @@ public class ImageConverterTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             
             // Act
-            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, 0.0, AvifConversionEngine.AvifEnc, CancellationToken.None });
+            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, 0.1, AvifConversionEngine.AvifEnc, CancellationToken.None });
 
             // Assert
             Assert.True(result.IsSuccess, $"Conversion should succeed via fallback. Error: {result.ErrorMessage}");

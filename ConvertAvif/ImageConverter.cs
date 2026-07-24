@@ -430,8 +430,8 @@ public partial class ImageConverter
                     return new ConversionResult(inputPath, false, "Exif profile lost during conversion.");
             }
 
-            // SSIMの確認
-            var ssim = original.Compare(converted, ErrorMetric.StructuralSimilarity);
+            // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
+            var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
             if (ssim < ssimThreshold)
                 return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {ssimThreshold})");
 
