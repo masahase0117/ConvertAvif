@@ -13,6 +13,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- シングルバイナリ化を有効にする -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- ネイティブライブラリ（Magick.NET等）もEXEに含める -->
+    <!-- 実行時に一時フォルダに解凍されます -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
 </Project>
