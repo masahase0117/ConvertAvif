@@ -284,6 +284,7 @@ public class ImageConverterTests
             Assert.False(firstResult.IsSuccess);
             Assert.Contains("SSIM too low", firstResult.ErrorMessage!);
             Assert.True(File.Exists(file), "Original file should NOT be deleted due to low SSIM.");
+            Assert.False(File.Exists(Path.ChangeExtension(file, ".avif")), "Output AVIF should be deleted on failure.");
         }
         finally
         {

@@ -384,10 +384,10 @@ public partial class ImageConverter
         AvifConversionEngine engine,
         CancellationToken ct)
     {
+        var outputPath = Path.ChangeExtension(inputPath, ".avif");
         try
         {
             ct.ThrowIfCancellationRequested();
-            var outputPath = Path.ChangeExtension(inputPath, ".avif");
 
             // 1. 変換
             if (engine == AvifConversionEngine.AvifEnc)
@@ -414,12 +414,18 @@ public partial class ImageConverter
 
             // 正常なAVIFファイルか (MagickImageで読み込めている時点で基本OKだが、形式確認)
             if (converted.Format != MagickFormat.Avif)
+            {
+                DeleteOutputFile(outputPath);
                 return new ConversionResult(inputPath, false, "Generated file is not in AVIF format.");
+            }
 
             // 縦横の画素数が同じか
             if (original.Width != converted.Width || original.Height != converted.Height)
+            {
+                DeleteOutputFile(outputPath);
                 return new ConversionResult(inputPath, false,
                     $"Dimension mismatch: Original {original.Width}x{original.Height}, Converted {converted.Width}x{converted.Height}");
+            }
 
             // Exifプロファイルの確認
             var originalExif = original.GetExifProfile();
@@ -427,20 +433,29 @@ public partial class ImageConverter
             {
                 var convertedExif = converted.GetExifProfile();
                 if (convertedExif == null)
+                {
+                    DeleteOutputFile(outputPath);
                     return new ConversionResult(inputPath, false, "Exif profile lost during conversion.");
+                }
             }
 
             // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
             var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
             if (ssim < ssimThreshold)
+            {
+                DeleteOutputFile(outputPath);
                 return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {ssimThreshold})");
+            }
 
             // ファイルサイズが小さいか
             var originalSize = new FileInfo(inputPath).Length;
             var convertedSize = new FileInfo(outputPath).Length;
             if (convertedSize >= originalSize)
+            {
+                DeleteOutputFile(outputPath);
                 return new ConversionResult(inputPath, false,
                     $"File size increased: Original {originalSize}, Converted {convertedSize}");
+            }
 
             // すべて合格なら元ファイルを削除
             File.Delete(inputPath);
@@ -449,7 +464,23 @@ public partial class ImageConverter
         }
         catch (Exception ex)
         {
+            DeleteOutputFile(outputPath);
             return new ConversionResult(inputPath, false, ex.Message);
+        }
+    }
+
+    private static void DeleteOutputFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // 削除失敗は無視する
         }
     }
 
