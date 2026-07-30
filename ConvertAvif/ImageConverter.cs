@@ -167,6 +167,13 @@ public partial class ImageConverter
         if (Speed.HasValue) image.Settings.SetDefine(MagickFormat.Avif, "speed", Speed.Value.ToString());
 
         image.Quality = Quality;
+        if (Quality == 100)
+        {
+            image.Settings.SetDefine(MagickFormat.Avif, "lossless", "true");
+            // Workaround for environment-specific AOM encoder issues during lossless conversion
+            image.Settings.SetDefine(MagickFormat.Avif, "enable-chroma-deltaq", "false");
+            image.Settings.SetDefine("heic:enable-chroma-deltaq", "false");
+        }
         image.Write(outputPath, MagickFormat.Avif);
     }
 
@@ -250,8 +257,15 @@ public partial class ImageConverter
         var isV140OrNewer = v >= new Version(1, 4, 0);
 
         // Quality
-        args.Add("-q");
-        args.Add(Quality.ToString());
+        if (Quality == 100)
+        {
+            args.Add("-l");
+        }
+        else
+        {
+            args.Add("-q");
+            args.Add(Quality.ToString());
+        }
 
         // Speed
         if (Speed.HasValue)
@@ -440,11 +454,15 @@ public partial class ImageConverter
             }
 
             // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
-            var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
-            if (ssim < ssimThreshold)
+            // Qualityが100の場合はロスレスのためSSIMの確認をスキップする
+            if (Quality < 100)
             {
-                DeleteOutputFile(outputPath);
-                return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {ssimThreshold})");
+                var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
+                if (ssim < ssimThreshold)
+                {
+                    DeleteOutputFile(outputPath);
+                    return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {ssimThreshold})");
+                }
             }
 
             // ファイルサイズが小さいか
