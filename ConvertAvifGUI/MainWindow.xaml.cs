@@ -36,6 +36,7 @@ public partial class MainWindow : Window
 
             SourceDirTextBox.Text = _settings.SourceDirectory;
             ExtensionsTextBox.Text = _settings.Extensions;
+            QualitySlider.Value = _settings.Quality;
             SsimTextBox.Text = _settings.SsimThreshold.ToString();
             ParallelTextBox.Text = _settings.MaxDegreeOfParallelism.ToString();
             EngineComboBox.Text = _settings.ConversionEngine;
@@ -52,6 +53,7 @@ public partial class MainWindow : Window
     {
         _settings.SourceDirectory = SourceDirTextBox.Text;
         _settings.Extensions = ExtensionsTextBox.Text;
+        _settings.Quality = (uint)QualitySlider.Value;
         if (double.TryParse(SsimTextBox.Text, out double ssim)) _settings.SsimThreshold = ssim;
         if (int.TryParse(ParallelTextBox.Text, out int parallel)) _settings.MaxDegreeOfParallelism = parallel;
         _settings.ConversionEngine = EngineComboBox.Text;
@@ -124,6 +126,7 @@ public partial class MainWindow : Window
             if (!double.TryParse(SsimTextBox.Text, out double ssimThreshold)) ssimThreshold = 0.9;
             if (!int.TryParse(ParallelTextBox.Text, out int maxParallelism)) maxParallelism = 4;
 
+            _converter.Quality = _settings.Quality;
             _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
             _converter.AvifEncPath = AvifEncPathTextBox.Text;
             _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
@@ -183,6 +186,8 @@ public partial class MainWindow : Window
         BrowseButton.IsEnabled = !isRunning;
         ExtensionsTextBox.IsEnabled = !isRunning;
         SsimTextBox.IsEnabled = !isRunning;
+        QualitySlider.IsEnabled = !isRunning;
+        QualityTextBox.IsEnabled = !isRunning;
         ParallelTextBox.IsEnabled = !isRunning;
         EngineComboBox.IsEnabled = !isRunning;
         AvifEncPathTextBox.IsEnabled = !isRunning;

@@ -34,10 +34,21 @@
                 <TextBox x:Name="ExtensionsTextBox"/>
             </StackPanel>
             <StackPanel Margin="0,0,10,0">
+                <TextBlock Text="Quality:"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="50"/>
+                    </Grid.ColumnDefinitions>
+                    <Slider x:Name="QualitySlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBox x:Name="QualityTextBox" Grid.Column="1" VerticalContentAlignment="Center" Text="{Binding Value, ElementName=QualitySlider, UpdateSourceTrigger=PropertyChanged}"/>
+                </Grid>
+            </StackPanel>
+            <StackPanel Margin="0,0,10,0">
                 <TextBlock Text="SSIM 閾値:"/>
                 <TextBox x:Name="SsimTextBox"/>
             </StackPanel>
-            <StackPanel>
+            <StackPanel Margin="0,5,10,0">
                 <TextBlock Text="並列実行数:"/>
                 <TextBox x:Name="ParallelTextBox"/>
             </StackPanel>
@@ -59,7 +70,7 @@
                     <Button x:Name="AvifEncBrowseButton" Content="..." Grid.Column="1" Margin="5,0,0,0" Padding="5,0" Click="AvifEncBrowseButton_Click"/>
                 </Grid>
             </StackPanel>
-            <StackPanel Margin="0,5,0,0">
+            <StackPanel Margin="0,5,0,0" Grid.ColumnSpan="3">
                 <TextBlock Text="avifenc オプション:"/>
                 <TextBox x:Name="AvifEncOptionsTextBox"/>
             </StackPanel>
