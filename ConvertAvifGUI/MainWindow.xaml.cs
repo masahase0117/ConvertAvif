@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Win32;
 using ConvertAvif;
 using System.Collections.ObjectModel;
+using System.Windows.Controls;
 
 namespace ConvertAvifGUI;
 
@@ -33,7 +34,8 @@ public partial class MainWindow : Window
                 .Build();
 
             _settings = config.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
-
+            
+            // UIに値をセット
             SourceDirTextBox.Text = _settings.SourceDirectory;
             ExtensionsTextBox.Text = _settings.Extensions;
             QualitySlider.Value = _settings.Quality;
@@ -42,6 +44,9 @@ public partial class MainWindow : Window
             EngineComboBox.Text = _settings.ConversionEngine;
             AvifEncPathTextBox.Text = _settings.AvifEncPath;
             AvifEncOptionsTextBox.Text = _settings.AvifEncCustomOptions;
+
+            // 初期状態の更新
+            UpdateAvifEncSettingsVisibility();
         }
         catch (Exception ex)
         {
@@ -195,8 +200,30 @@ public partial class MainWindow : Window
         QualityTextBox.IsEnabled = !isRunning;
         ParallelTextBox.IsEnabled = !isRunning;
         EngineComboBox.IsEnabled = !isRunning;
-        AvifEncPathTextBox.IsEnabled = !isRunning;
-        AvifEncBrowseButton.IsEnabled = !isRunning;
-        AvifEncOptionsTextBox.IsEnabled = !isRunning;
+
+        UpdateAvifEncSettingsVisibility();
+    }
+
+    private void EngineComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateAvifEncSettingsVisibility();
+    }
+
+    private void UpdateAvifEncSettingsVisibility()
+    {
+        if (AvifEncSettingsGroup == null) return;
+
+        bool isAvifEnc = false;
+        if (EngineComboBox.SelectedItem is ComboBoxItem item)
+        {
+            isAvifEnc = item.Content.ToString() == "AvifEnc";
+        }
+        else
+        {
+            isAvifEnc = EngineComboBox.Text == "AvifEnc";
+        }
+
+        // 実行中は常に無効、停止中はエンジン設定に従う
+        AvifEncSettingsGroup.IsEnabled = ConvertButton.IsEnabled && isAvifEnc;
     }
 }
