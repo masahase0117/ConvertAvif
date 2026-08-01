@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConvertAvif.Tests", "Conver
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConvertAvifCUI", "ConvertAvifCUI\ConvertAvifCUI.csproj", "{DABFF41E-0F0C-486D-BBD8-F7423C349F95}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConvertAvifGUI", "ConvertAvifGUI\ConvertAvifGUI.csproj", "{9B1F92AD-B050-4170-8060-210C26E0CD8D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -52,6 +54,18 @@ Global
 		{DABFF41E-0F0C-486D-BBD8-F7423C349F95}.Release|x64.Build.0 = Release|Any CPU
 		{DABFF41E-0F0C-486D-BBD8-F7423C349F95}.Release|x86.ActiveCfg = Release|Any CPU
 		{DABFF41E-0F0C-486D-BBD8-F7423C349F95}.Release|x86.Build.0 = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|x64.Build.0 = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Debug|x86.Build.0 = Debug|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|x64.ActiveCfg = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|x64.Build.0 = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|x86.ActiveCfg = Release|Any CPU
+		{9B1F92AD-B050-4170-8060-210C26E0CD8D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
