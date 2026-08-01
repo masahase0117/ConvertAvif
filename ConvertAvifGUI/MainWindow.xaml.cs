@@ -178,6 +178,11 @@ public partial class MainWindow : Window
         _cts?.Cancel();
     }
 
+    private void Window_Closed(object? sender, EventArgs e)
+    {
+        SaveSettings();
+    }
+
     private void SetUiState(bool isRunning)
     {
         ConvertButton.IsEnabled = !isRunning;
