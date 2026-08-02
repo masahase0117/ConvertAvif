@@ -42,8 +42,8 @@ public partial class MainWindow
             SsimTextBox.Text = _settings.SsimThreshold.ToString();
             ParallelTextBox.Text = _settings.MaxDegreeOfParallelism.ToString();
             EngineComboBox.Text = _settings.ConversionEngine;
-            AvifEncPathTextBox.Text = _settings.AvifEncPath;
-            AvifEncOptionsTextBox.Text = _settings.AvifEncCustomOptions;
+            AvifEncPathTextBox.Text = _settings.AvifEncPath ?? "";
+            AvifEncOptionsTextBox.Text = _settings.AvifEncCustomOptions ?? "";
 
             // 初期状態の更新
             UpdateAvifEncSettingsVisibility();
