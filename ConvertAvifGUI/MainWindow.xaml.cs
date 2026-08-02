@@ -15,7 +15,7 @@ public partial class MainWindow
     private CancellationTokenSource? _cts;
     private AppSettings _settings = new();
     private readonly string _settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
-    private readonly ObservableCollection<ConversionResult> _failures = new();
+    private readonly ObservableCollection<ConversionResult> _failures = [];
 
     public MainWindow()
     {
