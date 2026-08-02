@@ -59,8 +59,8 @@ public partial class MainWindow
         _settings.SourceDirectory = SourceDirTextBox.Text;
         _settings.Extensions = ExtensionsTextBox.Text;
         _settings.Quality = (uint)QualitySlider.Value;
-        if (double.TryParse(SsimTextBox.Text, out double ssim)) _settings.SsimThreshold = ssim;
-        if (int.TryParse(ParallelTextBox.Text, out int parallel)) _settings.MaxDegreeOfParallelism = parallel;
+        if (double.TryParse(SsimTextBox.Text, out var ssim)) _settings.SsimThreshold = ssim;
+        if (int.TryParse(ParallelTextBox.Text, out var parallel)) _settings.MaxDegreeOfParallelism = parallel;
         _settings.ConversionEngine = EngineComboBox.Text;
         _settings.AvifEncPath = AvifEncPathTextBox.Text;
         _settings.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
@@ -128,8 +128,8 @@ public partial class MainWindow
         try
         {
             var extensions = ExtensionsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (!double.TryParse(SsimTextBox.Text, out double ssimThreshold)) ssimThreshold = 0.9;
-            if (!int.TryParse(ParallelTextBox.Text, out int maxParallelism)) maxParallelism = 4;
+            if (!double.TryParse(SsimTextBox.Text, out var ssimThreshold)) ssimThreshold = 0.9;
+            if (!int.TryParse(ParallelTextBox.Text, out var maxParallelism)) maxParallelism = 4;
 
             _converter.Quality = _settings.Quality;
             _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
@@ -213,7 +213,7 @@ public partial class MainWindow
     {
         if (AvifEncSettingsGroup == null) return;
 
-        bool isAvifEnc = false;
+        var isAvifEnc = false;
         if (EngineComboBox.SelectedItem is ComboBoxItem item)
         {
             isAvifEnc = item.Content.ToString() == "AvifEnc";
