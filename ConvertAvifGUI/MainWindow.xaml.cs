@@ -54,6 +54,7 @@ public partial class MainWindow
         }
     }
 
+    private readonly JsonSerializerOptions _jsonSerializerOptions = new() { WriteIndented = true };
     private void SaveSettings()
     {
         _settings.SourceDirectory = SourceDirTextBox.Text;
@@ -67,8 +68,7 @@ public partial class MainWindow
 
         try
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(new { AppSettings = _settings }, options);
+            var json = JsonSerializer.Serialize(new { AppSettings = _settings }, _jsonSerializerOptions);
             File.WriteAllText(_settingsPath, json);
         }
         catch (Exception ex)
