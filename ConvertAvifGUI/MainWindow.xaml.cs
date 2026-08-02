@@ -9,7 +9,7 @@ using System.Windows.Controls;
 
 namespace ConvertAvifGUI;
 
-public partial class MainWindow : Window
+public partial class MainWindow
 {
     private readonly ImageConverter _converter = new();
     private CancellationTokenSource? _cts;
