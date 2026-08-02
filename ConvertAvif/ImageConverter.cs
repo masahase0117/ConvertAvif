@@ -220,11 +220,9 @@ public partial class ImageConverter
         }
         process.WaitForExit();
 
-        if (process.ExitCode != 0)
-        {
-            var error = process.StandardError.ReadToEnd();
-            throw new InvalidOperationException($"avifenc failed with exit code {process.ExitCode}. Error: {error}");
-        }
+        if (process.ExitCode == 0) return;
+        var error = process.StandardError.ReadToEnd();
+        throw new InvalidOperationException($"avifenc failed with exit code {process.ExitCode}. Error: {error}");
     }
 
     private static string GetAvifEncVersion(string path)
@@ -360,7 +358,7 @@ public partial class ImageConverter
             foreach (var file in filesToProcess)
             {
                 totalFiles++;
-                await fileChannel.Writer.WriteAsync(file, ct);
+                await fileChannel.Writer.WriteAsync(file, ct).ConfigureAwait(false);
             }
 
             fileChannel.Writer.Complete();
@@ -369,17 +367,17 @@ public partial class ImageConverter
         // 変換・検証ステージ
         var workerTasks = Enumerable.Range(0, maxDegreeOfParallelism).Select(_ => Task.Run(async () =>
         {
-            await foreach (var inputFile in fileChannel.Reader.ReadAllAsync(ct))
+            await foreach (var inputFile in fileChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
                 var result = ProcessFile(inputFile, ssimThreshold, ConversionEngine, ct);
-                await resultChannel.Writer.WriteAsync(result, ct);
+                await resultChannel.Writer.WriteAsync(result, ct).ConfigureAwait(false);
             }
         }, ct)).ToArray();
 
         _ = Task.WhenAll(workerTasks).ContinueWith(_ => resultChannel.Writer.Complete(), ct);
 
         // 結果集約ステージ (IAsyncEnumerableとして yield return する)
-        await foreach (var result in resultChannel.Reader.ReadAllAsync(ct))
+        await foreach (var result in resultChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
             processedCount++;
             if (result.IsSuccess) successCount++;
@@ -391,7 +389,7 @@ public partial class ImageConverter
             yield return result;
         }
 
-        await producerTask;
+        await producerTask.ConfigureAwait(false);
     }
 
     private ConversionResult ProcessFile(string inputPath, double ssimThreshold,
