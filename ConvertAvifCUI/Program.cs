@@ -26,11 +26,20 @@ static class Program
             getDefaultValue: () => 75u);
         qualityOption.AddAlias("-q");
 
-        var ssimOption = new Option<double>(
-            name: "--ssim",
-            description: "SSIMのしきい値 (0.0-1.0)。この値未満の場合は元のファイルを削除しません。",
+        var thresholdOption = new Option<double>(
+            name: "--threshold",
+            description: "画質評価のしきい値 (0.0-100.0)。この値未満の場合は元のファイルを削除しません。",
             getDefaultValue: () => 0.9);
-        ssimOption.AddAlias("-s");
+        thresholdOption.AddAlias("-t");
+
+        var evalModeOption = new Option<QualityEvaluationMode>(
+            name: "--eval-mode",
+            description: "画質評価モード",
+            getDefaultValue: () => QualityEvaluationMode.SSIM);
+
+        var ssimulacra2PathOption = new Option<string?>(
+            name: "--ssimulacra2",
+            description: "ssimulacra2.exeのパス");
 
         var parallelOption = new Option<int>(
             name: "--parallel",
@@ -67,7 +76,9 @@ static class Program
         rootCommand.AddArgument(dirArgument);
         rootCommand.AddOption(extensionsOption);
         rootCommand.AddOption(qualityOption);
-        rootCommand.AddOption(ssimOption);
+        rootCommand.AddOption(thresholdOption);
+        rootCommand.AddOption(evalModeOption);
+        rootCommand.AddOption(ssimulacra2PathOption);
         rootCommand.AddOption(parallelOption);
         rootCommand.AddOption(speedOption);
         rootCommand.AddOption(depthOption);
@@ -81,7 +92,9 @@ static class Program
             var dir = context.ParseResult.GetValueForArgument(dirArgument);
             var extensions = context.ParseResult.GetValueForOption(extensionsOption) ?? [".jpg", ".jpeg", ".png"];
             var quality = context.ParseResult.GetValueForOption(qualityOption);
-            var ssim = context.ParseResult.GetValueForOption(ssimOption);
+            var threshold = context.ParseResult.GetValueForOption(thresholdOption);
+            var evalMode = context.ParseResult.GetValueForOption(evalModeOption);
+            var ssimulacra2Path = context.ParseResult.GetValueForOption(ssimulacra2PathOption);
             var parallel = context.ParseResult.GetValueForOption(parallelOption);
             var speed = context.ParseResult.GetValueForOption(speedOption);
             var depth = context.ParseResult.GetValueForOption(depthOption);
@@ -98,13 +111,21 @@ static class Program
                 ConversionEngine = engine,
                 AvifEncPath = avifencPath,
                 AvifEncCustomOptions = avifencOptions,
-                AvifEncPriority = priority
+                AvifEncPriority = priority,
+                EvaluationMode = evalMode,
+                Ssimulacra2Path = ssimulacra2Path,
+                QualityThreshold = threshold
             };
 
             Console.WriteLine($"ディレクトリ: {dir.FullName}");
             Console.WriteLine($"拡張子: {string.Join(", ", extensions)}");
             Console.WriteLine($"クオリティ: {quality}");
-            Console.WriteLine($"SSIMしきい値: {ssim}");
+            Console.WriteLine($"評価モード: {evalMode}");
+            Console.WriteLine($"画質しきい値: {threshold}");
+            if (evalMode == QualityEvaluationMode.Ssimulacra2)
+            {
+                Console.WriteLine($"ssimulacra2パス: {ssimulacra2Path ?? "未指定 (パスが通っている必要があります)"}");
+            }
             Console.WriteLine($"エンジン: {engine}");
             if (engine == AvifConversionEngine.AvifEnc)
             {
@@ -123,7 +144,6 @@ static class Program
             await foreach (var result in converter.ConvertDirectoryToAvifAsync(
                 dir.FullName, 
                 extensions, 
-                ssimThreshold: ssim, 
                 maxDegreeOfParallelism: parallel,
                 progress: progress,
                 ct: CancellationToken.None)) // ダミーのct、実際にはcontextから取得できるならそれが良い

@@ -220,12 +220,14 @@ public class ImageConverterTests
         {
             // Act
             var results = new List<ConversionResult>();
-            var ic = new ImageConverter();
-            ic.Quality = 50;
+            var ic = new ImageConverter
+            {
+                Quality = 50,
+                QualityThreshold = 0.1 // しきい値を下げる（1.0が完全一致なので、0.1以上なら成功）
+            };
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
                 new[] { ".jpg" },
-                0.1, // しきい値を下げる（1.0が完全一致なので、0.1以上なら成功）
                 progress: progress))
             {
                 results.Add(result);
@@ -268,12 +270,14 @@ public class ImageConverterTests
         {
             // Act
             var results = new List<ConversionResult>();
-            var ic = new ImageConverter();
-            ic.Quality = 1; // 極端に低クオリティにしてSSIMを下げる
+            var ic = new ImageConverter
+            {
+                Quality = 1, // 極端に低クオリティにしてSSIMを下げる
+                QualityThreshold = 0.999 // 非常に高いしきい値(1.0に近い値なので、少しでも劣化すると失敗)
+            };
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
-                new[] { ".jpg" },
-                0.999)) // 非常に高いしきい値(1.0に近い値なので、少しでも劣化すると失敗)
+                new[] { ".jpg" }))
             {
                 results.Add(result);
             }
@@ -430,12 +434,12 @@ public class ImageConverterTests
             var ic = new ImageConverter
             {
                 AvifEncPath = avifEncPath,
-                ConversionEngine = AvifConversionEngine.AvifEnc
+                ConversionEngine = AvifConversionEngine.AvifEnc,
+                QualityThreshold = 0.1
             };
             await foreach (var result in ic.ConvertDirectoryToAvifAsync(
                 testDir,
-                new[] { ".png" },
-                0.1))
+                new[] { ".png" }))
             {
                 results.Add(result);
             }
@@ -479,7 +483,7 @@ public class ImageConverterTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             
             // Act
-            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, 0.1, AvifConversionEngine.AvifEnc, CancellationToken.None });
+            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, AvifConversionEngine.AvifEnc, CancellationToken.None });
 
             // Assert
             Assert.True(result.IsSuccess, $"Conversion should succeed via fallback. Error: {result.ErrorMessage}");
@@ -525,7 +529,7 @@ public class ImageConverterTests
             // 代わりに、SSIM計算部分をモック化できないので、ReflectionでQuality < 100 の分岐を確認するテストに留めるか、
             // あるいは、環境エラーを許容する形式にする。
             
-            var result = (ConversionResult)method.Invoke(ic, new object[] { bmpPath, 1.0, AvifConversionEngine.Magick, CancellationToken.None });
+            var result = (ConversionResult)method.Invoke(ic, new object[] { bmpPath, AvifConversionEngine.Magick, CancellationToken.None });
 
             // Assert
             // 環境によっては変換自体が失敗するため、IsSuccessのチェックは環境に依存する。

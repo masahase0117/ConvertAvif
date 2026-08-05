@@ -39,7 +39,9 @@ public partial class MainWindow
             SourceDirTextBox.Text = _settings.SourceDirectory;
             ExtensionsTextBox.Text = _settings.Extensions;
             QualitySlider.Value = _settings.Quality;
-            SsimTextBox.Text = _settings.SsimThreshold.ToString();
+            EvaluationModeComboBox.Text = _settings.EvaluationMode;
+            Ssimulacra2PathTextBox.Text = _settings.Ssimulacra2Path ?? "";
+            SsimTextBox.Text = _settings.QualityThreshold.ToString();
             ParallelTextBox.Text = _settings.MaxDegreeOfParallelism.ToString();
             EngineComboBox.Text = _settings.ConversionEngine;
             AvifEncPathTextBox.Text = _settings.AvifEncPath ?? "";
@@ -60,7 +62,9 @@ public partial class MainWindow
         _settings.SourceDirectory = SourceDirTextBox.Text;
         _settings.Extensions = ExtensionsTextBox.Text;
         _settings.Quality = (uint)QualitySlider.Value;
-        if (double.TryParse(SsimTextBox.Text, out var ssim)) _settings.SsimThreshold = ssim;
+        _settings.EvaluationMode = EvaluationModeComboBox.Text;
+        _settings.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
+        if (double.TryParse(SsimTextBox.Text, out var threshold)) _settings.QualityThreshold = threshold;
         if (int.TryParse(ParallelTextBox.Text, out var parallel)) _settings.MaxDegreeOfParallelism = parallel;
         _settings.ConversionEngine = EngineComboBox.Text;
         _settings.AvifEncPath = AvifEncPathTextBox.Text;
@@ -107,6 +111,22 @@ public partial class MainWindow
         }
     }
 
+    private void Ssimulacra2BrowseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+            InitialDirectory = !string.IsNullOrWhiteSpace(Ssimulacra2PathTextBox.Text)
+                ? Path.GetDirectoryName(Ssimulacra2PathTextBox.Text)
+                : null
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            Ssimulacra2PathTextBox.Text = dialog.FileName;
+        }
+    }
+
     private async void ConvertButton_Click(object sender, RoutedEventArgs e)
     {
         var sourceDir = SourceDirTextBox.Text;
@@ -128,13 +148,16 @@ public partial class MainWindow
         try
         {
             var extensions = ExtensionsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (!double.TryParse(SsimTextBox.Text, out var ssimThreshold)) ssimThreshold = 0.9;
+            if (!double.TryParse(SsimTextBox.Text, out var threshold)) threshold = 0.9;
             if (!int.TryParse(ParallelTextBox.Text, out var maxParallelism)) maxParallelism = 4;
 
             _converter.Quality = _settings.Quality;
             _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
             _converter.AvifEncPath = AvifEncPathTextBox.Text;
             _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
+            _converter.EvaluationMode = Enum.TryParse<QualityEvaluationMode>(EvaluationModeComboBox.Text, out var evalMode) ? evalMode : QualityEvaluationMode.SSIM;
+            _converter.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
+            _converter.QualityThreshold = threshold;
 
             var progress = new Progress<ConversionProgress>(p =>
             {
@@ -147,7 +170,6 @@ public partial class MainWindow
             await foreach (var result in _converter.ConvertDirectoryToAvifAsync(
                 sourceDir, 
                 extensions, 
-                ssimThreshold, 
                 maxParallelism, 
                 progress, 
                 _cts.Token))
@@ -195,6 +217,7 @@ public partial class MainWindow
         SourceDirTextBox.IsEnabled = !isRunning;
         BrowseButton.IsEnabled = !isRunning;
         ExtensionsTextBox.IsEnabled = !isRunning;
+        EvaluationModeComboBox.IsEnabled = !isRunning;
         SsimTextBox.IsEnabled = !isRunning;
         QualitySlider.IsEnabled = !isRunning;
         QualityTextBox.IsEnabled = !isRunning;
@@ -202,11 +225,17 @@ public partial class MainWindow
         EngineComboBox.IsEnabled = !isRunning;
 
         UpdateAvifEncSettingsVisibility();
+        UpdateEvaluationSettingsVisibility();
     }
 
     private void EngineComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateAvifEncSettingsVisibility();
+    }
+
+    private void EvaluationModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateEvaluationSettingsVisibility();
     }
 
     private void UpdateAvifEncSettingsVisibility()
@@ -225,5 +254,23 @@ public partial class MainWindow
 
         // 実行中は常に無効、停止中はエンジン設定に従う
         AvifEncSettingsGroup.IsEnabled = ConvertButton.IsEnabled && isAvifEnc;
+    }
+
+    private void UpdateEvaluationSettingsVisibility()
+    {
+        if (Ssimulacra2SettingsGroup == null) return;
+
+        var isSsimulacra2 = false;
+        if (EvaluationModeComboBox.SelectedItem is ComboBoxItem item)
+        {
+            isSsimulacra2 = item.Content.ToString() == "Ssimulacra2";
+        }
+        else
+        {
+            isSsimulacra2 = EvaluationModeComboBox.Text == "Ssimulacra2";
+        }
+
+        Ssimulacra2SettingsGroup.Visibility = isSsimulacra2 ? Visibility.Visible : Visibility.Collapsed;
+        ThresholdLabel.Text = isSsimulacra2 ? "SSIMULACRA2 閾値:" : "SSIM 閾値:";
     }
 }

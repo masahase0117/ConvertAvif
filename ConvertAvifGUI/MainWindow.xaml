@@ -12,6 +12,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -46,7 +47,14 @@
                 </Grid>
             </StackPanel>
             <StackPanel Margin="0,0,10,0">
-                <TextBlock Text="SSIM 閾値:"/>
+                <TextBlock Text="評価モード:"/>
+                <ComboBox x:Name="EvaluationModeComboBox" SelectedIndex="0" SelectionChanged="EvaluationModeComboBox_SelectionChanged">
+                    <ComboBoxItem Content="SSIM"/>
+                    <ComboBoxItem Content="Ssimulacra2"/>
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Margin="0,0,10,0">
+                <TextBlock x:Name="ThresholdLabel" Text="SSIM 閾値:"/>
                 <TextBox x:Name="SsimTextBox"/>
             </StackPanel>
             <StackPanel Margin="0,5,10,0">
@@ -85,14 +93,29 @@
             </StackPanel>
         </Grid>
 
+        <!-- Ssimulacra2 Settings -->
+        <Grid Grid.Row="3" x:Name="Ssimulacra2SettingsGroup" Margin="0,0,0,10" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="ssimulacra2 パス:"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="Ssimulacra2PathTextBox" Grid.Column="0" VerticalContentAlignment="Center"/>
+                    <Button x:Name="Ssimulacra2BrowseButton" Content="参照..." Grid.Column="1" Margin="5,0,0,0" Padding="10,2" Click="Ssimulacra2BrowseButton_Click"/>
+                </Grid>
+            </StackPanel>
+        </Grid>
+
         <!-- Actions -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
             <Button x:Name="ConvertButton" Content="変換開始" Width="100" Padding="5" Margin="0,0,10,0" Click="ConvertButton_Click"/>
             <Button x:Name="CancelButton" Content="キャンセル" Width="100" Padding="5" IsEnabled="False" Click="CancelButton_Click"/>
         </StackPanel>
 
         <!-- Results / Failure List -->
-        <GroupBox Grid.Row="4" Header="変換結果 / 失敗したファイル">
+        <GroupBox Grid.Row="5" Header="変換結果 / 失敗したファイル">
             <ListView x:Name="FailureListView">
                 <ListView.View>
                     <GridView>
@@ -105,7 +128,7 @@
         </GroupBox>
 
         <!-- Progress -->
-        <StackPanel Grid.Row="5" Margin="0,10,0,0">
+        <StackPanel Grid.Row="6" Margin="0,10,0,0">
             <ProgressBar x:Name="ConversionProgressBar" Height="20" Minimum="0" Maximum="100"/>
             <TextBlock x:Name="StatusTextBlock" Text="準備完了" Margin="0,5,0,0"/>
         </StackPanel>

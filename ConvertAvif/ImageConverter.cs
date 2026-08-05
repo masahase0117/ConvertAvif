@@ -37,6 +37,22 @@ public enum AvifConversionEngine
     AvifEnc
 }
 
+/// <summary>
+/// 画質評価に使用するエンジン
+/// </summary>
+public enum QualityEvaluationMode
+{
+    /// <summary>
+    /// SSIM (Structural Similarity) を使用します。
+    /// </summary>
+    SSIM,
+
+    /// <summary>
+    /// SSIMULACRA2 を使用します。
+    /// </summary>
+    Ssimulacra2
+}
+
 public partial class ImageConverter
 {
     /// <summary>
@@ -129,6 +145,21 @@ public partial class ImageConverter
     /// avifenc実行時のプロセス優先度
     /// </summary>
     public ProcessPriorityClass AvifEncPriority { get; set; } = ProcessPriorityClass.Normal;
+
+    /// <summary>
+    /// 画質評価モード
+    /// </summary>
+    public QualityEvaluationMode EvaluationMode { get; set; } = QualityEvaluationMode.SSIM;
+
+    /// <summary>
+    /// ssimulacra2.exe のパス
+    /// </summary>
+    public string? Ssimulacra2Path { get; set; }
+
+    /// <summary>
+    /// 画質評価のしきい値
+    /// </summary>
+    public double QualityThreshold { get; set; } = 0.9;
 
 
     /// <summary>
@@ -327,7 +358,6 @@ public partial class ImageConverter
     /// </summary>
     /// <param name="directoryPath">対象フォルダのパス</param>
     /// <param name="extensions">対象とする拡張子 (例: ".jpg", ".png")</param>
-    /// <param name="ssimThreshold">SSIMのしきい値 (0.0 - 1.0)</param>
     /// <param name="maxDegreeOfParallelism">並列実行数</param>
     /// <param name="progress">進捗通知用の IProgress インターフェース</param>
     /// <param name="ct">キャンセル申告</param>
@@ -335,7 +365,6 @@ public partial class ImageConverter
     public async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
         string directoryPath,
         string[] extensions,
-        double ssimThreshold = 0.9,
         int maxDegreeOfParallelism = 4,
         IProgress<ConversionProgress>? progress = null,
         [EnumeratorCancellation] CancellationToken ct = default)
@@ -369,7 +398,7 @@ public partial class ImageConverter
         {
             await foreach (var inputFile in fileChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
-                var result = ProcessFile(inputFile, ssimThreshold, ConversionEngine, ct);
+                var result = ProcessFile(inputFile, ConversionEngine, ct);
                 await resultChannel.Writer.WriteAsync(result, ct).ConfigureAwait(false);
             }
         }, ct)).ToArray();
@@ -392,7 +421,7 @@ public partial class ImageConverter
         await producerTask.ConfigureAwait(false);
     }
 
-    private ConversionResult ProcessFile(string inputPath, double ssimThreshold,
+    private ConversionResult ProcessFile(string inputPath,
         AvifConversionEngine engine,
         CancellationToken ct)
     {
@@ -451,15 +480,28 @@ public partial class ImageConverter
                 }
             }
 
-            // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
-            // Qualityが100の場合はロスレスのためSSIMの確認をスキップする
+            // 画質の確認
+            // Qualityが100の場合はロスレスのため画質の確認をスキップする
             if (Quality < 100)
             {
-                var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
-                if (ssim < ssimThreshold)
+                if (EvaluationMode == QualityEvaluationMode.Ssimulacra2)
                 {
-                    DeleteOutputFile(outputPath);
-                    return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {ssimThreshold})");
+                    var score = GetSsimulacra2Score(inputPath, outputPath);
+                    if (score < QualityThreshold)
+                    {
+                        DeleteOutputFile(outputPath);
+                        return new ConversionResult(inputPath, false, $"SSIMULACRA2 too low: {score:F4} (Threshold: {QualityThreshold})");
+                    }
+                }
+                else
+                {
+                    // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
+                    var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
+                    if (ssim < QualityThreshold)
+                    {
+                        DeleteOutputFile(outputPath);
+                        return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {QualityThreshold})");
+                    }
                 }
             }
 
@@ -483,6 +525,36 @@ public partial class ImageConverter
             DeleteOutputFile(outputPath);
             return new ConversionResult(inputPath, false, ex.Message);
         }
+    }
+
+    private double GetSsimulacra2Score(string originalPath, string convertedPath)
+    {
+        var exePath = Ssimulacra2Path ?? "ssimulacra2.exe";
+        var tmpPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
+        var img = new MagickImage(convertedPath);
+        img.Format = MagickFormat.Png;
+        img.Write(tmpPath);
+        var psi = new ProcessStartInfo
+        {
+            FileName = exePath,
+            Arguments = $"\"{originalPath}\" \"{tmpPath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start ssimulacra2.exe");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"ssimulacra2.exe failed with exit code {process.ExitCode}: {error}");
+        }
+
+        return double.TryParse(output.Trim(), out var score) ? score : throw new Exception($"Failed to parse ssimulacra2.exe output: {output}");
     }
 
     private static void DeleteOutputFile(string path)
