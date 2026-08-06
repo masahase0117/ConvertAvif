@@ -5,7 +5,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Win32;
 using ConvertAvif;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows.Controls;
+using System.Windows.Data;
 
 namespace ConvertAvifGUI;
 
@@ -272,5 +274,72 @@ public partial class MainWindow
 
         Ssimulacra2SettingsGroup.Visibility = isSsimulacra2 ? Visibility.Visible : Visibility.Collapsed;
         ThresholdLabel.Text = isSsimulacra2 ? "SSIMULACRA2 閾値:" : "SSIM 閾値:";
+    }
+
+    private GridViewColumnHeader? _lastHeaderClicked = null;
+    private ListSortDirection _lastDirection = ListSortDirection.Ascending;
+    private void GridViewColumnHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is not GridViewColumnHeader headerClicked || headerClicked.Role == GridViewColumnHeaderRole.Padding) return;
+
+        if (headerClicked.Column.DisplayMemberBinding is not Binding binding) return;
+        var sortBy = binding.Path.Path;
+        if (string.IsNullOrEmpty(sortBy)) return;
+
+        var direction = ListSortDirection.Ascending;
+        if (headerClicked == _lastHeaderClicked && _lastDirection == ListSortDirection.Ascending)
+        {
+            direction = ListSortDirection.Descending;
+        }
+
+        // ソート実行
+        Sort(sortBy, direction);
+
+        // 【追加】ヘッダーに▲▼の見た目を反映
+        UpdateHeaderTemplate(headerClicked, direction);
+
+        _lastHeaderClicked = headerClicked;
+        _lastDirection = direction;
+    }
+    private void Sort(string sortBy, ListSortDirection direction)
+    {
+        var dataView = CollectionViewSource.GetDefaultView(FailureListView.ItemsSource);
+        if (dataView == null) return;
+
+        dataView.SortDescriptions.Clear();
+        var sd = new SortDescription(sortBy, direction);
+        dataView.SortDescriptions.Add(sd);
+        dataView.Refresh();
+    }
+    // 【追加】ヘッダーの文字の後ろに矢印をつける処理
+    private void UpdateHeaderTemplate(GridViewColumnHeader clickedHeader, ListSortDirection direction)
+    {
+        // 前回クリックしたヘッダーから矢印を消す
+        if (_lastHeaderClicked != null && _lastHeaderClicked != clickedHeader)
+        {
+            ResetHeaderContent(_lastHeaderClicked);
+        }
+
+        // 初回、または文字列のままの場合は現在の状態を保持
+        if (clickedHeader.Tag is not string propName) return;
+        // 元のヘッダーテキストを取得
+        var baseText = clickedHeader.Column.Header.ToString();
+        // 既に矢印がついていたら削る
+        if (baseText != null && (baseText.EndsWith(" ▲") || baseText.EndsWith(" ▼")))
+        {
+            baseText = baseText[..^2];
+        }
+
+        // 新しい矢印を付与
+        var arrow = (direction == ListSortDirection.Ascending) ? " ▲" : " ▼";
+        clickedHeader.Column.Header = baseText + arrow;
+    }
+    private void ResetHeaderContent(GridViewColumnHeader header)
+    {
+        var text = header.Column.Header.ToString();
+        if (text != null && (text.EndsWith(" ▲") || text.EndsWith(" ▼")))
+        {
+            header.Column.Header = text[..^2];
+        }
     }
 }
