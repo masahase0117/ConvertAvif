@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using ConvertAvif;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Data;
 
@@ -157,6 +158,16 @@ public partial class MainWindow
             _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
             _converter.AvifEncPath = AvifEncPathTextBox.Text;
             _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
+            _converter.AvifEncPriority = PriorityComboBox.SelectedIndex switch
+            {
+                0 => ProcessPriorityClass.Idle,
+                1 => ProcessPriorityClass.BelowNormal,
+                2 => ProcessPriorityClass.Normal,
+                3 => ProcessPriorityClass.AboveNormal,
+                4 => ProcessPriorityClass.High,
+                5 => ProcessPriorityClass.RealTime,
+                _ => ProcessPriorityClass.Idle
+            };
             _converter.EvaluationMode = Enum.TryParse<QualityEvaluationMode>(EvaluationModeComboBox.Text, out var evalMode) ? evalMode : QualityEvaluationMode.SSIM;
             _converter.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
             _converter.QualityThreshold = threshold;
@@ -227,6 +238,7 @@ public partial class MainWindow
         EngineComboBox.IsEnabled = !isRunning;
         Ssimulacra2PathTextBox.IsEnabled = !isRunning;
         Ssimulacra2BrowseButton.IsEnabled = !isRunning;
+        PriorityComboBox.IsEnabled = !isRunning;
 
         UpdateAvifEncSettingsVisibility();
         UpdateEvaluationSettingsVisibility();

@@ -74,7 +74,8 @@
         <Grid Grid.Row="2" x:Name="AvifEncSettingsGroup" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Margin="0,0,10,0">
                 <TextBlock Text="avifenc パス:"/>
@@ -90,6 +91,17 @@
             <StackPanel Grid.Column="1">
                 <TextBlock Text="avifenc オプション:"/>
                 <TextBox x:Name="AvifEncOptionsTextBox"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="avifenc プロセス優先度:"/>
+                <ComboBox x:Name="PriorityComboBox" SelectedIndex="0">
+                    <ComboBoxItem Content="低"/>
+                    <ComboBoxItem Content="通常以下"/>
+                    <ComboBoxItem Content="通常"/>
+                    <ComboBoxItem Content="通常以上"/>
+                    <ComboBoxItem Content="高"/>
+                    <ComboBoxItem Content="リアルタイム"/>
+                </ComboBox>
             </StackPanel>
         </Grid>
 
