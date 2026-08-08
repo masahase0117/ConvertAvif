@@ -225,6 +225,8 @@ public partial class MainWindow
         QualityTextBox.IsEnabled = !isRunning;
         ParallelTextBox.IsEnabled = !isRunning;
         EngineComboBox.IsEnabled = !isRunning;
+        Ssimulacra2PathTextBox.IsEnabled = !isRunning;
+        Ssimulacra2BrowseButton.IsEnabled = !isRunning;
 
         UpdateAvifEncSettingsVisibility();
         UpdateEvaluationSettingsVisibility();
