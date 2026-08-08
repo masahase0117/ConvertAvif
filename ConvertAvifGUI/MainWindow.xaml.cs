@@ -221,6 +221,7 @@ public partial class MainWindow
     private void Window_Closed(object? sender, EventArgs e)
     {
         SaveSettings();
+        Environment.Exit(0);
     }
 
     private void SetUiState(bool isRunning)
