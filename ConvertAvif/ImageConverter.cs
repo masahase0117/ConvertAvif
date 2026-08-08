@@ -144,12 +144,12 @@ public partial class ImageConverter
     /// <summary>
     /// avifenc実行時のプロセス優先度
     /// </summary>
-    public ProcessPriorityClass AvifEncPriority { get; set; } = ProcessPriorityClass.Normal;
+    public ProcessPriorityClass AvifEncPriority { get; set; } = ProcessPriorityClass.Idle;
 
     /// <summary>
     /// 画質評価モード
     /// </summary>
-    public QualityEvaluationMode EvaluationMode { get; set; } = QualityEvaluationMode.SSIM;
+    public QualityEvaluationMode EvaluationMode { get; set; } = QualityEvaluationMode.Ssimulacra2;
 
     /// <summary>
     /// ssimulacra2.exe のパス
@@ -159,7 +159,7 @@ public partial class ImageConverter
     /// <summary>
     /// 画質評価のしきい値
     /// </summary>
-    public double QualityThreshold { get; set; } = 0.9;
+    public double QualityThreshold { get; set; } = 80f;
 
 
     /// <summary>
