@@ -531,7 +531,7 @@ public partial class ImageConverter
     {
         var exePath = Ssimulacra2Path ?? "ssimulacra2.exe";
         var tmpPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
-        var img = new MagickImage(convertedPath);
+        using var img = new MagickImage(convertedPath);
         img.Format = MagickFormat.Png;
         img.Write(tmpPath);
         var psi = new ProcessStartInfo
@@ -543,18 +543,28 @@ public partial class ImageConverter
             UseShellExecute = false,
             CreateNoWindow = true
         };
-
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start ssimulacra2.exe");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
+        try
         {
-            throw new Exception($"ssimulacra2.exe failed with exit code {process.ExitCode}: {error}");
-        }
+            using var process = Process.Start(psi) ??
+                                throw new InvalidOperationException("Failed to start ssimulacra2.exe");
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
 
-        return double.TryParse(output.Trim(), out var score) ? score : throw new Exception($"Failed to parse ssimulacra2.exe output: {output}");
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception($"ssimulacra2.exe failed with exit code {process.ExitCode}: {error}");
+            }
+
+            return double.TryParse(output.Trim(), out var score)
+                ? score
+                : throw new Exception($"Failed to parse ssimulacra2.exe output: {output}");
+        }
+        finally
+        {
+            File.Delete(tmpPath);
+        }
     }
 
     private static void DeleteOutputFile(string path)
