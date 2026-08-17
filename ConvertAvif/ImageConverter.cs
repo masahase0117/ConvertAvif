@@ -532,6 +532,9 @@ public partial class ImageConverter
         var exePath = Ssimulacra2Path ?? "ssimulacra2.exe";
         var tmpPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
         using var img = new MagickImage(convertedPath);
+        img.ColorSpace = ImageMagick.ColorSpace.sRGB; // 色空間を sRGB に強制変換
+        img.Alpha(AlphaOption.Remove); // アルファチャンネルを削除
+        img.RemoveProfile("icc"); // ICC プロファイルを除去（必要なら有効化）
         img.Format = MagickFormat.Png;
         img.Write(tmpPath);
         var psi = new ProcessStartInfo
