@@ -49,6 +49,9 @@ public partial class MainWindow
             EngineComboBox.Text = _settings.ConversionEngine;
             AvifEncPathTextBox.Text = _settings.AvifEncPath ?? "";
             AvifEncOptionsTextBox.Text = _settings.AvifEncCustomOptions ?? "";
+            PriorityComboBox.SelectedIndex = _settings.AvifEncPriority ?? 0;
+            SpeedSlider.Value = _settings.AvifEncSpeed ?? 3;
+            TuneComboBox.Text = _settings.AvifEncTune ?? "iq";
 
             // 初期状態の更新
             UpdateAvifEncSettingsVisibility();
@@ -72,6 +75,9 @@ public partial class MainWindow
         _settings.ConversionEngine = EngineComboBox.Text;
         _settings.AvifEncPath = AvifEncPathTextBox.Text;
         _settings.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
+        _settings.AvifEncPriority = PriorityComboBox.SelectedIndex;
+        if (int.TryParse(SpeedTextBox.Text, out var speed)) _settings.AvifEncSpeed = speed;
+        _settings.AvifEncTune = TuneComboBox.Text;
 
         try
         {
@@ -153,6 +159,7 @@ public partial class MainWindow
             var extensions = ExtensionsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (!double.TryParse(SsimTextBox.Text, out var threshold)) threshold = 0.9;
             if (!int.TryParse(ParallelTextBox.Text, out var maxParallelism)) maxParallelism = 4;
+            if (!uint.TryParse(SpeedTextBox.Text, out var speed)) speed = 3;
 
             _converter.Quality = _settings.Quality;
             _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
@@ -171,6 +178,16 @@ public partial class MainWindow
             _converter.EvaluationMode = Enum.TryParse<QualityEvaluationMode>(EvaluationModeComboBox.Text, out var evalMode) ? evalMode : QualityEvaluationMode.SSIM;
             _converter.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
             _converter.QualityThreshold = threshold;
+            _converter.Speed = speed;
+            if (_settings.Quality != 100)
+            {
+                _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text + " -a tune=" + TuneComboBox.Text;
+                if (SharpYuvCheckBox.IsChecked == true)
+                {
+                    _converter.AvifEncCustomOptions += " --sharpyuv";
+                }
+            }
+
 
             var progress = new Progress<ConversionProgress>(p =>
             {

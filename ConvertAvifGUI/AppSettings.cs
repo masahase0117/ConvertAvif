@@ -12,4 +12,7 @@ public class AppSettings
     public string ConversionEngine { get; set; } = "Magick";
     public string? AvifEncPath { get; set; }
     public string? AvifEncCustomOptions { get; set; }
+    public int? AvifEncPriority { get; set; }
+    public int? AvifEncSpeed { get; set; }
+    public string? AvifEncTune { get; set; }
 }
