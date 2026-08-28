@@ -215,7 +215,7 @@ public partial class ImageConverter
     /// <param name="outputPath">出力AVIFファイルのパス</param>
     /// <exception cref="InvalidOperationException"></exception>
     /// <exception cref="FileNotFoundException"></exception>
-    public void ConvertToAvifWithAvifEnc(string inputPath, string outputPath)
+    public async Task ConvertToAvifWithAvifEnc(string inputPath, string outputPath)
     {
         if (string.IsNullOrWhiteSpace(inputPath))
             throw new ArgumentException("Input path cannot be null or empty.", nameof(inputPath));
@@ -233,7 +233,7 @@ public partial class ImageConverter
         {
             FileName = AvifEncPath,
             Arguments = arguments,
-            RedirectStandardOutput = true,
+            RedirectStandardOutput = false,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
@@ -249,10 +249,11 @@ public partial class ImageConverter
             // 優先度の設定に失敗しても、変換自体は続行を試みる
             Console.WriteLine($"[Warning] Failed to set process priority: {ex.Message}");
         }
-        process.WaitForExit();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync().ConfigureAwait(false);
 
         if (process.ExitCode == 0) return;
-        var error = process.StandardError.ReadToEnd();
+        var error = await errorTask.ConfigureAwait(false);
         throw new InvalidOperationException($"avifenc failed with exit code {process.ExitCode}. Error: {error}");
     }
 
@@ -435,7 +436,7 @@ public partial class ImageConverter
             {
                 try
                 {
-                    ConvertToAvifWithAvifEnc(inputPath, outputPath);
+                    ConvertToAvifWithAvifEnc(inputPath, outputPath).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {
