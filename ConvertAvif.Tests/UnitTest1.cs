@@ -1,4 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using ImageMagick;
+using Xunit;
 
 namespace ConvertAvif.Tests;
 
@@ -89,7 +96,7 @@ public class ImageConverterTests
 
             // テスト用BMP作成
             using var image = new MagickImage(MagickColors.Green, 10, 10);
-            image.Write(bmpPath, MagickFormat.Bmp);
+            await image.WriteAsync(bmpPath, MagickFormat.Bmp);
         }
 
         try
@@ -263,7 +270,7 @@ public class ImageConverterTests
         using (var img = new MagickImage(MagickColors.Green, 100, 100))
         {
             img.AddNoise(NoiseType.Impulse);
-            img.Write(file, MagickFormat.Jpg);
+            await img.WriteAsync(file, MagickFormat.Jpg);
         }
 
         try
@@ -300,7 +307,7 @@ public class ImageConverterTests
     [InlineData("avifenc_v1.3.0.exe")]
     [InlineData("avifenc_v1.4.0.exe")]
     [InlineData("avifenc_v1.4.2.exe")]
-    public void ConvertToAvifWithAvifEnc_MultipleVersions_ShouldCreateAvif(string avifEncExe)
+    public async Task ConvertToAvifWithAvifEnc_MultipleVersions_ShouldCreateAvif(string avifEncExe)
     {
         // Arrange
         const string pngPath = "test_avifenc.png";
@@ -324,7 +331,7 @@ public class ImageConverterTests
             };
 
             // Act
-            ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
+            await ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
 
             // Assert
             Assert.True(File.Exists(avifPath), $"Output AVIF file should exist for {avifEncExe}.");
@@ -345,7 +352,7 @@ public class ImageConverterTests
     }
 
     [Fact]
-    public void ConvertToAvifWithAvifEnc_WithCustomOptions_ShouldPassOptionsToAvifEnc()
+    public async Task ConvertToAvifWithAvifEnc_WithCustomOptions_ShouldPassOptionsToAvifEnc()
     {
         // Arrange
         const string pngPath = "test_custom.png";
@@ -366,7 +373,7 @@ public class ImageConverterTests
             };
 
             // Act
-            ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
+            await ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
 
             // Assert
             Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
@@ -401,7 +408,7 @@ public class ImageConverterTests
 
             // Act & Assert
             // 優先度の設定自体が例外を投げないことを確認しつつ、変換が成功することを確認
-            var exception = Record.Exception(() => ic.ConvertToAvifWithAvifEnc(pngPath, avifPath));
+            var exception = Record.Exception(() => ic.ConvertToAvifWithAvifEnc(pngPath, avifPath).GetAwaiter().GetResult());
             Assert.Null(exception);
             Assert.True(File.Exists(avifPath));
         }
@@ -424,7 +431,7 @@ public class ImageConverterTests
         using (var img = new MagickImage(MagickColors.Red, 200, 200))
         {
             img.AddNoise(NoiseType.Gaussian);
-            img.Write(file, MagickFormat.Png);
+            await img.WriteAsync(file, MagickFormat.Png);
         }
 
         try
@@ -465,7 +472,7 @@ public class ImageConverterTests
         // 10x10の画像だとSSIMが不安定な場合があるため、少し大きくする
         using (var image = new MagickImage(MagickColors.Green, 100, 100))
         {
-            image.Write(pngPath, MagickFormat.Png);
+            await image.WriteAsync(pngPath, MagickFormat.Png);
         }
 
         try
@@ -483,10 +490,10 @@ public class ImageConverterTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             
             // Act
-            var result = (ConversionResult)method.Invoke(ic, new object[] { pngPath, AvifConversionEngine.AvifEnc, CancellationToken.None });
+            var result = (ConversionResult)method?.Invoke(ic, new object[] { pngPath, AvifConversionEngine.AvifEnc, CancellationToken.None });
 
             // Assert
-            Assert.True(result.IsSuccess, $"Conversion should succeed via fallback. Error: {result.ErrorMessage}");
+            Assert.True(result?.IsSuccess, $"Conversion should succeed via fallback. Error: {result?.ErrorMessage}");
             Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
             Assert.False(File.Exists(pngPath), "Original PNG should be deleted on success.");
         }
@@ -529,12 +536,12 @@ public class ImageConverterTests
             // 代わりに、SSIM計算部分をモック化できないので、ReflectionでQuality < 100 の分岐を確認するテストに留めるか、
             // あるいは、環境エラーを許容する形式にする。
             
-            var result = (ConversionResult)method.Invoke(ic, new object[] { bmpPath, AvifConversionEngine.Magick, CancellationToken.None });
+            var result = (ConversionResult)method?.Invoke(ic, new object[] { bmpPath, AvifConversionEngine.Magick, CancellationToken.None });
 
             // Assert
             // 環境によっては変換自体が失敗するため、IsSuccessのチェックは環境に依存する。
             // もし成功したなら、SSIM 1.0 (しきい値1.0) でパスしたことになるので、スキップまたはロスレスが効いている証拠。
-            if (result.IsSuccess)
+            if (result?.IsSuccess == true)
             {
                 Assert.True(File.Exists(avifPath));
             }
@@ -542,7 +549,7 @@ public class ImageConverterTests
             {
                 // エラー内容が AOM encoder error なら、変換エンジン側の問題であり、
                 // 我々のロジック（Quality=100の時に特定の処理をする）自体は動いている。
-                Assert.Contains("AOM encoder error", result.ErrorMessage!);
+                Assert.Contains("AOM encoder error", result?.ErrorMessage!);
             }
         }
         finally
@@ -561,7 +568,7 @@ public class ImageConverterTests
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         
         // Act
-        var args = (string)method.Invoke(ic, new object[] { "1.4.2", "in.png", "out.avif" });
+        var args = (string?)method?.Invoke(ic, new object[] { "1.4.2", "in.png", "out.avif" })??"";
 
         // Assert
         Assert.Contains("-l", args);
