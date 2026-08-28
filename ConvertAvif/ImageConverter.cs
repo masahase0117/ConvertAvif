@@ -202,7 +202,7 @@ public partial class ImageConverter
             else if (Enum.TryParse<ColorSpace>(ColorSpace, true, out var parsedColorSpace))
             {
                 image.ColorSpace = parsedColorSpace;
-                if (parsedColorSpace == ImageMagick.ColorSpace.Gray || parsedColorSpace == ImageMagick.ColorSpace.LinearGray)
+                if (parsedColorSpace is ImageMagick.ColorSpace.Gray or ImageMagick.ColorSpace.LinearGray)
                 {
                     image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:0:0");
                 }
@@ -641,12 +641,12 @@ public partial class ImageConverter
     /// <returns>グレイスケール画像の場合は true</returns>
     private static bool IsGrayscaleImage(MagickImage image)
     {
-        if (image.ColorSpace == ImageMagick.ColorSpace.Gray || image.ColorSpace == ImageMagick.ColorSpace.LinearGray)
+        if (image.ColorSpace is ImageMagick.ColorSpace.Gray or ImageMagick.ColorSpace.LinearGray)
             return true;
-        if (image.ColorType == ColorType.Grayscale || image.ColorType == ColorType.GrayscaleAlpha || image.ColorType == ColorType.Bilevel)
+        if (image.ColorType is ColorType.Grayscale or ColorType.GrayscaleAlpha or ColorType.Bilevel)
             return true;
         var detected = image.DetermineColorType();
-        return detected == ColorType.Grayscale || detected == ColorType.GrayscaleAlpha || detected == ColorType.Bilevel;
+        return detected is ColorType.Grayscale or ColorType.GrayscaleAlpha or ColorType.Bilevel;
     }
 
     private static void DeleteOutputFile(string path)
