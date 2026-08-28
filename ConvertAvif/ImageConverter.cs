@@ -116,6 +116,11 @@ public partial class ImageConverter
             {
                 if (value.Equals("YV12", StringComparison.OrdinalIgnoreCase) ||
                     value.Equals("YUV444", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("YUV400", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("400", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("420", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("422", StringComparison.OrdinalIgnoreCase) ||
+                    value.Equals("444", StringComparison.OrdinalIgnoreCase) ||
                     Enum.TryParse<ColorSpace>(value, true, out _))
                 {
                     field = value;
@@ -188,10 +193,28 @@ public partial class ImageConverter
                 image.ColorSpace = ImageMagick.ColorSpace.YUV;
                 image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:4:4");
             }
+            else if (ColorSpace.Equals("YUV400", StringComparison.OrdinalIgnoreCase) ||
+                     ColorSpace.Equals("400", StringComparison.OrdinalIgnoreCase))
+            {
+                image.ColorSpace = ImageMagick.ColorSpace.Gray;
+                image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:0:0");
+            }
             else if (Enum.TryParse<ColorSpace>(ColorSpace, true, out var parsedColorSpace))
             {
                 image.ColorSpace = parsedColorSpace;
+                if (parsedColorSpace == ImageMagick.ColorSpace.Gray || parsedColorSpace == ImageMagick.ColorSpace.LinearGray)
+                {
+                    image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:0:0");
+                }
             }
+        }
+        else if (IsGrayscaleImage(image))
+        {
+            if (image.ColorSpace != ImageMagick.ColorSpace.LinearGray)
+            {
+                image.ColorSpace = ImageMagick.ColorSpace.Gray;
+            }
+            image.Settings.SetDefine(MagickFormat.Avif, "chroma-subsampling", "4:0:0");
         }
 
         if (BitDepth.HasValue) image.Depth = BitDepth.Value;
@@ -311,27 +334,67 @@ public partial class ImageConverter
             args.Add(BitDepth.Value.ToString());
         }
 
+        var isGrayscale = false;
+        if (!string.IsNullOrWhiteSpace(ColorSpace))
+        {
+            if (ColorSpace.Equals("400", StringComparison.OrdinalIgnoreCase) ||
+                ColorSpace.Equals("YUV400", StringComparison.OrdinalIgnoreCase) ||
+                ColorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) ||
+                ColorSpace.Equals("LinearGray", StringComparison.OrdinalIgnoreCase))
+            {
+                isGrayscale = true;
+            }
+        }
+        else
+        {
+            try
+            {
+                using var testImage = new MagickImage(inputPath);
+                isGrayscale = IsGrayscaleImage(testImage);
+            }
+            catch
+            {
+                // 入力画像の読み込みに失敗した場合は無視
+            }
+        }
+
         // Color Space / YUV Format
-        if (!string.IsNullOrWhiteSpace(ColorSpace) && Quality < 100)
+        if (!string.IsNullOrWhiteSpace(ColorSpace))
+        {
+            if (Quality < 100 || isGrayscale || ColorSpace.Contains("444") || ColorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("sRGB", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add("-y");
+                if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Add("420");
+                }
+                else if (ColorSpace.Equals("YUV444", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Add("444");
+                }
+                else if (ColorSpace.Equals("YUV400", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Add("400");
+                }
+                else if (ColorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("LinearGray", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Add("400");
+                }
+                else
+                {
+                    // avifenc accepts 444, 422, 420, 400
+                    if (ColorSpace.Contains("444")) args.Add("444");
+                    else if (ColorSpace.Contains("422")) args.Add("422");
+                    else if (ColorSpace.Contains("420")) args.Add("420");
+                    else if (ColorSpace.Contains("400")) args.Add("400");
+                    else args.Add("auto");
+                }
+            }
+        }
+        else if (isGrayscale)
         {
             args.Add("-y");
-            if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
-            {
-                args.Add("420");
-            }
-            else if (ColorSpace.Equals("YUV444", StringComparison.OrdinalIgnoreCase))
-            {
-                args.Add("444");
-            }
-            else
-            {
-                // avifenc accepts 444, 422, 420, 400
-                if (ColorSpace.Contains("444")) args.Add("444");
-                else if (ColorSpace.Contains("422")) args.Add("422");
-                else if (ColorSpace.Contains("420")) args.Add("420");
-                else if (ColorSpace.Contains("400")) args.Add("400");
-                else args.Add("auto");
-            }
+            args.Add("400");
         }
 
         // Example of version-specific difference
@@ -569,6 +632,21 @@ public partial class ImageConverter
         {
             File.Delete(tmpPath);
         }
+    }
+
+    /// <summary>
+    ///     画像がグレイスケール画像かどうかを判定します。
+    /// </summary>
+    /// <param name="image">判定対象の画像</param>
+    /// <returns>グレイスケール画像の場合は true</returns>
+    private static bool IsGrayscaleImage(MagickImage image)
+    {
+        if (image.ColorSpace == ImageMagick.ColorSpace.Gray || image.ColorSpace == ImageMagick.ColorSpace.LinearGray)
+            return true;
+        if (image.ColorType == ColorType.Grayscale || image.ColorType == ColorType.GrayscaleAlpha || image.ColorType == ColorType.Bilevel)
+            return true;
+        var detected = image.DetermineColorType();
+        return detected == ColorType.Grayscale || detected == ColorType.GrayscaleAlpha || detected == ColorType.Bilevel;
     }
 
     private static void DeleteOutputFile(string path)

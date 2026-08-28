@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -573,5 +574,179 @@ public class ImageConverterTests
         // Assert
         Assert.Contains("-l", args);
         Assert.DoesNotContain("-q 100", args);
+    }
+    [Fact]
+    public void ConvertToAvif_GrayscaleImage_ShouldCreateGrayscaleAvif()
+    {
+        // Arrange
+        const string bmpPath = "test_grayscale.bmp";
+        const string avifPath = "test_grayscale.avif";
+
+        using (var image = new MagickImage(MagickColors.Gray, 20, 20))
+        {
+            image.ColorType = ColorType.Grayscale;
+            image.ColorSpace = ColorSpace.Gray;
+            image.Write(bmpPath, MagickFormat.Bmp);
+        }
+
+        try
+        {
+            var ic = new ImageConverter();
+
+            // Act
+            ic.ConvertToAvif(bmpPath, avifPath);
+
+            // Assert
+            Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
+            using var avifImage = new MagickImage(avifPath);
+            Assert.Equal(MagickFormat.Avif, avifImage.Format);
+            Assert.Equal(ColorType.Grayscale, avifImage.DetermineColorType());
+        }
+        finally
+        {
+            if (File.Exists(bmpPath)) File.Delete(bmpPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
+
+    [Fact]
+    public async Task ConvertToAvifWithAvifEnc_GrayscaleImage_ShouldCreateGrayscaleAvif()
+    {
+        // Arrange
+        const string pngPath = "test_grayscale_enc.png";
+        const string avifPath = "test_grayscale_enc.avif";
+        string avifEncPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "avifenc_v1.4.2.exe");
+
+        using (var image = new MagickImage(MagickColors.Gray, 20, 20))
+        {
+            image.ColorType = ColorType.Grayscale;
+            image.ColorSpace = ColorSpace.Gray;
+            image.Write(pngPath, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                AvifEncPath = avifEncPath,
+                Quality = 80
+            };
+
+            // Act
+            await ic.ConvertToAvifWithAvifEnc(pngPath, avifPath);
+
+            // Assert
+            Assert.True(File.Exists(avifPath), "Output AVIF file should exist.");
+            using var avifImage = new MagickImage(avifPath);
+            Assert.Equal(MagickFormat.Avif, avifImage.Format);
+            Assert.Equal(ColorType.Grayscale, avifImage.DetermineColorType());
+        }
+        finally
+        {
+            if (File.Exists(pngPath)) File.Delete(pngPath);
+            if (File.Exists(avifPath)) File.Delete(avifPath);
+        }
+    }
+
+    [Fact]
+    public void BuildAvifEncArguments_GrayscaleImage_ShouldInclude400Option()
+    {
+        // Arrange
+        const string grayPng = "test_gray_arg.png";
+        try
+        {
+            using (var img = new MagickImage(MagickColors.Gray, 10, 10))
+            {
+                img.ColorType = ColorType.Grayscale;
+                img.ColorSpace = ColorSpace.Gray;
+                img.Write(grayPng, MagickFormat.Png);
+            }
+
+            var ic = new ImageConverter();
+            var method = typeof(ImageConverter).GetMethod("BuildAvifEncArguments",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            // Act
+            var args = (string?)method?.Invoke(ic, new object[] { "1.4.2", grayPng, "out.avif" }) ?? "";
+
+            // Assert
+            Assert.Contains("-y 400", args);
+        }
+        finally
+        {
+            if (File.Exists(grayPng)) File.Delete(grayPng);
+        }
+    }
+
+    [Theory]
+    [InlineData("400")]
+    [InlineData("YUV400")]
+    [InlineData("Gray")]
+    [InlineData("LinearGray")]
+    public void BuildAvifEncArguments_ExplicitGrayscaleColorSpace_ShouldInclude400Option(string colorSpace)
+    {
+        // Arrange
+        var ic = new ImageConverter { ColorSpace = colorSpace };
+        var method = typeof(ImageConverter).GetMethod("BuildAvifEncArguments",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        // Act
+        var args = (string?)method?.Invoke(ic, new object[] { "1.4.2", "dummy.png", "out.avif" }) ?? "";
+
+        // Assert
+        Assert.Contains("-y 400", args);
+    }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_GrayscaleFiles_ShouldConvertAndDeleteOriginals()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+
+        var file1 = Path.Combine(testDir, "gray1.jpg");
+        var file2 = Path.Combine(testDir, "gray2.png");
+
+        using (var img1 = new MagickImage(MagickColors.Gray, 50, 50))
+        {
+            img1.ColorType = ColorType.Grayscale;
+            img1.AddNoise(NoiseType.Gaussian);
+            img1.Write(file1, MagickFormat.Jpg);
+        }
+
+        using (var img2 = new MagickImage(MagickColors.LightGray, 50, 50))
+        {
+            img2.ColorType = ColorType.Grayscale;
+            img2.AddNoise(NoiseType.Gaussian);
+            img2.Write(file2, MagickFormat.Png);
+        }
+
+        try
+        {
+            var results = new List<ConversionResult>();
+            var ic = new ImageConverter
+            {
+                Quality = 80,
+                QualityThreshold = 0.5
+            };
+
+            // Act
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(testDir, new[] { ".jpg", ".png" }))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Equal(2, results.Count);
+            Assert.All(results, r => Assert.True(r.IsSuccess, $"Conversion failed: {r.ErrorMessage}"));
+            Assert.False(File.Exists(file1), "Original JPG should be deleted.");
+            Assert.False(File.Exists(file2), "Original PNG should be deleted.");
+            Assert.True(File.Exists(Path.ChangeExtension(file1, ".avif")));
+            Assert.True(File.Exists(Path.ChangeExtension(file2, ".avif")));
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
     }
 }
