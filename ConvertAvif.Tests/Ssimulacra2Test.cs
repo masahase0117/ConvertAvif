@@ -1,6 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Xunit;
-using ConvertAvif;
 using ImageMagick;
 
 namespace ConvertAvif.Tests;
@@ -33,7 +35,7 @@ public class Ssimulacra2Test : IDisposable
         var inputPath = Path.Combine(_tempDir, "test.png");
         using (var img = new MagickImage(MagickColors.Blue, 100, 100))
         {
-            img.Write(inputPath, MagickFormat.Png);
+            await img.WriteAsync(inputPath, MagickFormat.Png);
         }
 
         var ic = new ImageConverter
@@ -69,7 +71,7 @@ public class Ssimulacra2Test : IDisposable
         var inputPath = Path.Combine(_tempDir, "test_low.png");
         using (var img = new MagickImage(MagickColors.Red, 100, 100))
         {
-            img.Write(inputPath, MagickFormat.Png);
+            await img.WriteAsync(inputPath, MagickFormat.Png);
         }
 
         var ic = new ImageConverter
