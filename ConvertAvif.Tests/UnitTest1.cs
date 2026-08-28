@@ -749,4 +749,112 @@ public class ImageConverterTests
             if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
         }
     }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_FileSizeIncreased_ShouldDeleteOutputFileAndKeepOriginal()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "tiny_compressed.jpg");
+
+        // 非常に小さい低画質JPEGを作成（AVIF化でファイルサイズが増加しやすいようにする）
+        using (var img = new MagickImage(MagickColors.Blue, 16, 16))
+        {
+            img.Quality = 10;
+            await img.WriteAsync(file, MagickFormat.Jpg);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 95, // 高品質にして出力サイズを元ファイルより大きくする
+                QualityThreshold = 0.1
+            };
+
+            var results = new List<ConversionResult>();
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(testDir, new[] { ".jpg" }))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Single(results);
+            var resultItem = results[0];
+            Assert.False(resultItem.IsSuccess);
+            Assert.Contains("File size increased", resultItem.ErrorMessage!);
+            Assert.True(File.Exists(file), "Original file should NOT be deleted when file size increases.");
+            Assert.False(File.Exists(Path.ChangeExtension(file, ".avif")), "Output AVIF should be deleted on failure.");
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
+    }
+
+    [Fact]
+    public void ImageConverter_DeleteOutputFile_ReadOnlyFile_ShouldDeleteFile()
+    {
+        // Arrange
+        var tempFile = Path.Combine(Path.GetTempPath(), $"readonly_test_{Guid.NewGuid():N}.avif");
+        File.WriteAllText(tempFile, "dummy avif content");
+        File.SetAttributes(tempFile, FileAttributes.ReadOnly);
+
+        try
+        {
+            var method = typeof(ImageConverter).GetMethod("DeleteOutputFile",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            // Act
+            method?.Invoke(null, new object[] { tempFile });
+
+            // Assert
+            Assert.False(File.Exists(tempFile), "Read-only file should be successfully deleted.");
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.SetAttributes(tempFile, FileAttributes.Normal);
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_IdenticalInputAndOutputPaths_ShouldFailWithoutDeletingFile()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "existing.avif");
+
+        using (var img = new MagickImage(MagickColors.Green, 20, 20))
+        {
+            await img.WriteAsync(file, MagickFormat.Avif);
+        }
+
+        try
+        {
+            var ic = new ImageConverter();
+            var results = new List<ConversionResult>();
+
+            // Act
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(testDir, new[] { ".avif" }))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Single(results);
+            Assert.False(results[0].IsSuccess);
+            Assert.Contains("identical", results[0].ErrorMessage!, StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(file), "Original AVIF file should remain intact.");
+        }
+        finally
+        {
+            if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
+        }
+    }
 }

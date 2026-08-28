@@ -486,6 +486,11 @@ public partial class ImageConverter
         CancellationToken ct)
     {
         var outputPath = Path.ChangeExtension(inputPath, ".avif");
+        if (string.Equals(Path.GetFullPath(inputPath), Path.GetFullPath(outputPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return new ConversionResult(inputPath, false, "Input and output file paths are identical.");
+        }
+
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -510,59 +515,54 @@ public partial class ImageConverter
             }
 
             // 2. 検証
-            using var original = new MagickImage(inputPath);
-            using var converted = new MagickImage(outputPath);
-
-            // 正常なAVIFファイルか (MagickImageで読み込めている時点で基本OKだが、形式確認)
-            if (converted.Format != MagickFormat.Avif)
+            string? validationError = null;
+            using (var original = new MagickImage(inputPath))
+            using (var converted = new MagickImage(outputPath))
             {
-                DeleteOutputFile(outputPath);
-                return new ConversionResult(inputPath, false, "Generated file is not in AVIF format.");
-            }
-
-            // 縦横の画素数が同じか
-            if (original.Width != converted.Width || original.Height != converted.Height)
-            {
-                DeleteOutputFile(outputPath);
-                return new ConversionResult(inputPath, false,
-                    $"Dimension mismatch: Original {original.Width}x{original.Height}, Converted {converted.Width}x{converted.Height}");
-            }
-
-            // Exifプロファイルの確認
-            var originalExif = original.GetExifProfile();
-            if (originalExif != null)
-            {
-                var convertedExif = converted.GetExifProfile();
-                if (convertedExif == null)
+                // 正常なAVIFファイルか (MagickImageで読み込めている時点で基本OKだが、形式確認)
+                if (converted.Format != MagickFormat.Avif)
                 {
-                    DeleteOutputFile(outputPath);
-                    return new ConversionResult(inputPath, false, "Exif profile lost during conversion.");
+                    validationError = "Generated file is not in AVIF format.";
                 }
-            }
-
-            // 画質の確認
-            // Qualityが100の場合はロスレスのため画質の確認をスキップする
-            if (Quality < 100)
-            {
-                if (EvaluationMode == QualityEvaluationMode.Ssimulacra2)
+                // 縦横の画素数が同じか
+                else if (original.Width != converted.Width || original.Height != converted.Height)
                 {
-                    var score = GetSsimulacra2Score(inputPath, outputPath);
-                    if (score < QualityThreshold)
+                    validationError =
+                        $"Dimension mismatch: Original {original.Width}x{original.Height}, Converted {converted.Width}x{converted.Height}";
+                }
+                // Exifプロファイルの確認
+                else if (original.GetExifProfile() != null && converted.GetExifProfile() == null)
+                {
+                    validationError = "Exif profile lost during conversion.";
+                }
+                // 画質の確認
+                // Qualityが100の場合はロスレスのため画質の確認をスキップする
+                else if (Quality < 100)
+                {
+                    if (EvaluationMode == QualityEvaluationMode.Ssimulacra2)
                     {
-                        DeleteOutputFile(outputPath);
-                        return new ConversionResult(inputPath, false, $"SSIMULACRA2 too low: {score:F4} (Threshold: {QualityThreshold})");
+                        var score = GetSsimulacra2Score(inputPath, outputPath);
+                        if (score < QualityThreshold)
+                        {
+                            validationError = $"SSIMULACRA2 too low: {score:F4} (Threshold: {QualityThreshold})";
+                        }
+                    }
+                    else
+                    {
+                        // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
+                        var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
+                        if (ssim < QualityThreshold)
+                        {
+                            validationError = $"SSIM too low: {ssim:F4} (Threshold: {QualityThreshold})";
+                        }
                     }
                 }
-                else
-                {
-                    // SSIMの確認 (Magick.NETのSSIMは不一致度を返すため 1.0 から引いて類似度にする)
-                    var ssim = 1.0 - original.Compare(converted, ErrorMetric.StructuralSimilarity);
-                    if (ssim < QualityThreshold)
-                    {
-                        DeleteOutputFile(outputPath);
-                        return new ConversionResult(inputPath, false, $"SSIM too low: {ssim:F4} (Threshold: {QualityThreshold})");
-                    }
-                }
+            }
+
+            if (validationError != null)
+            {
+                DeleteOutputFile(outputPath);
+                return new ConversionResult(inputPath, false, validationError);
             }
 
             // ファイルサイズが小さいか
@@ -645,18 +645,52 @@ public partial class ImageConverter
         return detected is ColorType.Grayscale or ColorType.GrayscaleAlpha or ColorType.Bilevel;
     }
 
+    /// <summary>
+    ///     出力ファイルを安全に削除します。一時的なファイルロックに対応するためリトライを行います。
+    /// </summary>
+    /// <param name="path">削除対象のファイルパス</param>
     private static void DeleteOutputFile(string path)
     {
-        try
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        const int maxRetries = 5;
+        const int delayMs = 100;
+
+        for (var i = 0; i < maxRetries; i++)
         {
-            if (File.Exists(path))
+            try
             {
+                if (!File.Exists(path))
+                {
+                    return;
+                }
+
+                var attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+                }
+
                 File.Delete(path);
+                return;
             }
-        }
-        catch
-        {
-            // 削除失敗は無視する
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (i == maxRetries - 1)
+                {
+                    Console.WriteLine($"[Warning] 出力ファイルの削除に失敗しました: {path} ({ex.Message})");
+                }
+                else
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Warning] 出力ファイルの削除中に予期しないエラーが発生しました: {path} ({ex.Message})");
+                return;
+            }
         }
     }
 
