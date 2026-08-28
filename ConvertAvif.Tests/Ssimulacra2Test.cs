@@ -97,6 +97,48 @@ public class Ssimulacra2Test : IDisposable
         Assert.False(File.Exists(Path.ChangeExtension(inputPath, ".avif")));
     }
 
+    [Fact]
+    public async Task ProcessFile_Ssimulacra2_MultipleLowScoreParallel_ShouldDeleteAllOutputFiles()
+    {
+        // Arrange
+        CreateMockSsimulacra2("0.4");
+
+        var files = new List<string>();
+        for (var i = 0; i < 4; i++)
+        {
+            var filePath = Path.Combine(_tempDir, $"multi_low_{i}.png");
+            using (var img = new MagickImage(MagickColors.Purple, 50, 50))
+            {
+                await img.WriteAsync(filePath, MagickFormat.Png);
+            }
+            files.Add(filePath);
+        }
+
+        var ic = new ImageConverter
+        {
+            EvaluationMode = QualityEvaluationMode.Ssimulacra2,
+            Ssimulacra2Path = _dummySsimulacra2,
+            QualityThreshold = 0.9,
+            Quality = 80
+        };
+
+        // Act
+        var results = new List<ConversionResult>();
+        await foreach (var result in ic.ConvertDirectoryToAvifAsync(_tempDir, new[] { ".png" }, maxDegreeOfParallelism: 4))
+        {
+            results.Add(result);
+        }
+
+        // Assert
+        Assert.Equal(4, results.Count);
+        Assert.All(results, r => Assert.False(r.IsSuccess));
+        foreach (var file in files)
+        {
+            Assert.True(File.Exists(file), $"Original file should be kept: {file}");
+            Assert.False(File.Exists(Path.ChangeExtension(file, ".avif")), $"Output AVIF should be deleted: {file}");
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

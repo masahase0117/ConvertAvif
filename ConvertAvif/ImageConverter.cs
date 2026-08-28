@@ -439,14 +439,16 @@ public partial class ImageConverter
         var resultChannel = Channel.CreateUnbounded<ConversionResult>(new UnboundedChannelOptions
             { SingleReader = true, SingleWriter = false });
 
-        // 探索ステージ
+        // 探索ステージ (先に全ファイルをリストアップして総数を確定)
+        var filesToProcess = Directory.EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories)
+            .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        totalFiles = filesToProcess.Count;
+
         var producerTask = Task.Run(async () =>
         {
-            var filesToProcess = Directory.EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories)
-                .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
             foreach (var file in filesToProcess)
             {
-                totalFiles++;
                 await fileChannel.Writer.WriteAsync(file, ct).ConfigureAwait(false);
             }
 
@@ -516,8 +518,11 @@ public partial class ImageConverter
 
             // 2. 検証
             string? validationError = null;
-            using (var original = new MagickImage(inputPath))
-            using (var converted = new MagickImage(outputPath))
+            var originalBytes = File.ReadAllBytes(inputPath);
+            var convertedBytes = File.ReadAllBytes(outputPath);
+
+            using (var original = new MagickImage(originalBytes))
+            using (var converted = new MagickImage(convertedBytes))
             {
                 // 正常なAVIFファイルか (MagickImageで読み込めている時点で基本OKだが、形式確認)
                 if (converted.Format != MagickFormat.Avif)
@@ -541,7 +546,7 @@ public partial class ImageConverter
                 {
                     if (EvaluationMode == QualityEvaluationMode.Ssimulacra2)
                     {
-                        var score = GetSsimulacra2Score(inputPath, outputPath);
+                        var score = GetSsimulacra2Score(inputPath, converted);
                         if (score < QualityThreshold)
                         {
                             validationError = $"SSIMULACRA2 too low: {score:F4} (Threshold: {QualityThreshold})";
@@ -576,7 +581,7 @@ public partial class ImageConverter
             }
 
             // すべて合格なら元ファイルを削除
-            File.Delete(inputPath);
+            DeleteOutputFile(inputPath);
 
             return new ConversionResult(inputPath, true, null);
         }
@@ -587,16 +592,19 @@ public partial class ImageConverter
         }
     }
 
-    private double GetSsimulacra2Score(string originalPath, string convertedPath)
+    private double GetSsimulacra2Score(string originalPath, MagickImage convertedImage)
     {
         var exePath = Ssimulacra2Path ?? "ssimulacra2.exe";
         var tmpPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
-        using var img = new MagickImage(convertedPath);
-        img.ColorSpace = ImageMagick.ColorSpace.sRGB; // 色空間を sRGB に強制変換
-        img.Alpha(AlphaOption.Remove); // アルファチャンネルを削除
-        img.RemoveProfile("icc"); // ICC プロファイルを除去（必要なら有効化）
-        img.Format = MagickFormat.Png;
-        img.Write(tmpPath);
+        using (var img = convertedImage.Clone())
+        {
+            img.ColorSpace = ImageMagick.ColorSpace.sRGB; // 色空間を sRGB に強制変換
+            img.Alpha(AlphaOption.Remove); // アルファチャンネルを削除
+            img.RemoveProfile("icc"); // ICC プロファイルを除去（必要なら有効化）
+            img.Format = MagickFormat.Png;
+            img.Write(tmpPath);
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = exePath,
@@ -626,7 +634,7 @@ public partial class ImageConverter
         }
         finally
         {
-            File.Delete(tmpPath);
+            DeleteOutputFile(tmpPath);
         }
     }
 
@@ -654,7 +662,7 @@ public partial class ImageConverter
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        const int maxRetries = 5;
+        const int maxRetries = 10;
         const int delayMs = 100;
 
         for (var i = 0; i < maxRetries; i++)
@@ -683,6 +691,8 @@ public partial class ImageConverter
                 }
                 else
                 {
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
                     Thread.Sleep(delayMs);
                 }
             }

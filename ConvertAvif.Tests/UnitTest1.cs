@@ -857,4 +857,52 @@ public class ImageConverterTests
             if (Directory.Exists(testDir)) Directory.Delete(testDir, true);
         }
     }
+
+    [Fact]
+    public async Task ConvertDirectoryToAvifAsync_ReadOnlyOriginalFile_ShouldSucceedAndDeleteOriginal()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "readonly_orig.png");
+
+        using (var img = new MagickImage(MagickColors.Green, 50, 50))
+        {
+            await img.WriteAsync(file, MagickFormat.Png);
+        }
+        File.SetAttributes(file, FileAttributes.ReadOnly);
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 80,
+                QualityThreshold = 0.5
+            };
+            var results = new List<ConversionResult>();
+
+            // Act
+            await foreach (var result in ic.ConvertDirectoryToAvifAsync(testDir, new[] { ".png" }))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Single(results);
+            Assert.True(results[0].IsSuccess, results[0].ErrorMessage);
+            Assert.False(File.Exists(file), "Read-only original file should be deleted on success.");
+            Assert.True(File.Exists(Path.ChangeExtension(file, ".avif")), "Output AVIF should exist.");
+        }
+        finally
+        {
+            if (File.Exists(file))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+            if (Directory.Exists(testDir))
+            {
+                Directory.Delete(testDir, true);
+            }
+        }
+    }
 }
