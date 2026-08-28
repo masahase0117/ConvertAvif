@@ -149,7 +149,7 @@ public partial class ImageConverter
     /// <summary>
     /// 画質評価モード
     /// </summary>
-    public QualityEvaluationMode EvaluationMode { get; set; } = QualityEvaluationMode.Ssimulacra2;
+    public QualityEvaluationMode EvaluationMode { get; set; } = QualityEvaluationMode.SSIM;
 
     /// <summary>
     /// ssimulacra2.exe のパス
@@ -159,7 +159,7 @@ public partial class ImageConverter
     /// <summary>
     /// 画質評価のしきい値
     /// </summary>
-    public double QualityThreshold { get; set; } = 80f;
+    public double QualityThreshold { get; set; } = 0.9;
 
 
     /// <summary>
