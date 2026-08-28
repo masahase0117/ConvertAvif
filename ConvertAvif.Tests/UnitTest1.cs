@@ -217,8 +217,8 @@ public class ImageConverterTests
         using (var img = new MagickImage(MagickColors.Red, 100, 100))
         {
             img.AddNoise(NoiseType.Gaussian);
-            img.Write(file1, MagickFormat.Jpg);
-            img.Write(file2, MagickFormat.Jpg);
+            await img.WriteAsync(file1, MagickFormat.Jpg);
+            await img.WriteAsync(file2, MagickFormat.Jpg);
         }
 
         var progressList = new List<ConversionProgress>();
@@ -319,7 +319,7 @@ public class ImageConverterTests
         // テスト用PNG画像を作成 (avifencはPNGをサポート)
         using (var image = new MagickImage(MagickColors.Red, 10, 10))
         {
-            image.Write(pngPath, MagickFormat.Png);
+            await image.WriteAsync(pngPath, MagickFormat.Png);
         }
 
         try
@@ -362,7 +362,7 @@ public class ImageConverterTests
 
         using (var image = new MagickImage(MagickColors.Cyan, 10, 10))
         {
-            image.Write(pngPath, MagickFormat.Png);
+            await image.WriteAsync(pngPath, MagickFormat.Png);
         }
 
         try
@@ -621,7 +621,7 @@ public class ImageConverterTests
         {
             image.ColorType = ColorType.Grayscale;
             image.ColorSpace = ColorSpace.Gray;
-            image.Write(pngPath, MagickFormat.Png);
+            await image.WriteAsync(pngPath, MagickFormat.Png);
         }
 
         try
@@ -711,14 +711,14 @@ public class ImageConverterTests
         {
             img1.ColorType = ColorType.Grayscale;
             img1.AddNoise(NoiseType.Gaussian);
-            img1.Write(file1, MagickFormat.Jpg);
+            await img1.WriteAsync(file1, MagickFormat.Jpg);
         }
 
         using (var img2 = new MagickImage(MagickColors.LightGray, 50, 50))
         {
             img2.ColorType = ColorType.Grayscale;
             img2.AddNoise(NoiseType.Gaussian);
-            img2.Write(file2, MagickFormat.Png);
+            await img2.WriteAsync(file2, MagickFormat.Png);
         }
 
         try
