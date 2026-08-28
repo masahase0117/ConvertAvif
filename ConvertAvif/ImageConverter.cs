@@ -304,14 +304,14 @@ public partial class ImageConverter
         }
 
         // Bit Depth
-        if (BitDepth.HasValue)
+        if (BitDepth.HasValue && Quality < 100)
         {
             args.Add("-d");
             args.Add(BitDepth.Value.ToString());
         }
 
         // Color Space / YUV Format
-        if (!string.IsNullOrWhiteSpace(ColorSpace))
+        if (!string.IsNullOrWhiteSpace(ColorSpace) && Quality < 100)
         {
             args.Add("-y");
             if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
