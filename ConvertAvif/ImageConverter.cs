@@ -372,11 +372,7 @@ public partial class ImageConverter
                 {
                     args.Add("444");
                 }
-                else if (ColorSpace.Equals("YUV400", StringComparison.OrdinalIgnoreCase))
-                {
-                    args.Add("400");
-                }
-                else if (ColorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("LinearGray", StringComparison.OrdinalIgnoreCase))
+                else if (ColorSpace.Equals("YUV400", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("LinearGray", StringComparison.OrdinalIgnoreCase))
                 {
                     args.Add("400");
                 }
