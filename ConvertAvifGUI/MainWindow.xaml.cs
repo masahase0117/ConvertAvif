@@ -210,8 +210,8 @@ public partial class MainWindow
                 }
             }
 
-            StatusTextBlock.Text = "変換完了";
-            MessageBox.Show(this, "変換が完了しました。");
+            StatusTextBlock.Text = $"変換完了(失敗: {_failures.Count})";
+            MessageBox.Show(this, $"変換が完了しました。(失敗: {_failures.Count})");
         }
         catch (OperationCanceledException)
         {
@@ -224,6 +224,7 @@ public partial class MainWindow
         }
         finally
         {
+            ConversionProgressBar.IsIndeterminate = false;
             SetUiState(false);
             _cts.Dispose();
             _cts = null;
