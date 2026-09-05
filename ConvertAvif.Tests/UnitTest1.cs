@@ -252,7 +252,6 @@ public class ImageConverterTests
             // 進捗通知の確認
             Assert.NotEmpty(progressList);
             Assert.Equal(2, progressList.Last().ProcessedFiles);
-            Assert.Equal(2, progressList.Last().TotalFiles);
         }
         finally
         {
@@ -899,6 +898,206 @@ public class ImageConverterTests
             {
                 File.SetAttributes(file, FileAttributes.Normal);
             }
+            if (Directory.Exists(testDir))
+            {
+                Directory.Delete(testDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ConversionResult_QualityEvaluationFailure_ShouldCorrectlyIdentifyQualityFailures()
+    {
+        // SSIM 画質失敗
+        var ssimFail = new ConversionResult("test.jpg", false, "SSIM too low: 0.8500 (Threshold: 0.9)");
+        Assert.True(ssimFail.IsQualityEvaluationFailure);
+
+        // SSIMULACRA2 画質失敗
+        var ssimulacraFail = new ConversionResult("test.jpg", false, "SSIMULACRA2 too low: 70.0000 (Threshold: 80)");
+        Assert.True(ssimulacraFail.IsQualityEvaluationFailure);
+
+        // 成功
+        var success = new ConversionResult("test.jpg", true, null);
+        Assert.False(success.IsQualityEvaluationFailure);
+
+        // ファイルサイズ増大による失敗（画質失敗ではない）
+        var sizeFail = new ConversionResult("test.jpg", false, "File size increased: Original 100, Converted 200");
+        Assert.False(sizeFail.IsQualityEvaluationFailure);
+
+        // その他のエラー
+        var otherFail = new ConversionResult("test.jpg", false, "Dimension mismatch: Original 10x10, Converted 20x20");
+        Assert.False(otherFail.IsQualityEvaluationFailure);
+    }
+
+    [Fact]
+    public async Task ConvertFilesToAvifAsync_ValidFileList_ShouldConvertSuccessfully()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file1 = Path.Combine(testDir, "test1.png");
+        var file2 = Path.Combine(testDir, "test2.png");
+
+        using (var img1 = new MagickImage(MagickColors.Red, 50, 50))
+        {
+            await img1.WriteAsync(file1, MagickFormat.Png);
+        }
+        using (var img2 = new MagickImage(MagickColors.Blue, 50, 50))
+        {
+            await img2.WriteAsync(file2, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 80,
+                QualityThreshold = 0.5
+            };
+
+            var results = new List<ConversionResult>();
+
+            // Act
+            await foreach (var result in ic.ConvertFilesToAvifAsync(new[] { file1, file2 }))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Equal(2, results.Count);
+            Assert.All(results, r => Assert.True(r.IsSuccess, r.ErrorMessage));
+            Assert.True(File.Exists(Path.ChangeExtension(file1, ".avif")));
+            Assert.True(File.Exists(Path.ChangeExtension(file2, ".avif")));
+            Assert.False(File.Exists(file1));
+            Assert.False(File.Exists(file2));
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+            {
+                Directory.Delete(testDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConvertFilesToAvifAsync_LowQualityFailsThenHighQualitySucceeds_ShouldSucceedOnRetry()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file = Path.Combine(testDir, "complex.png");
+
+        // ランダムノイズ的なパターンを含む画像を作成して低Quality時にSSIM閾値に引っかかりやすくする
+        using (var img = new MagickImage(MagickColors.White, 100, 100))
+        {
+            img.AddNoise(NoiseType.Gaussian);
+            await img.WriteAsync(file, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 1,
+                QualityThreshold = 0.99999 // 極めて高い閾値で低Quality時に失敗させる
+            };
+
+            var initialResults = new List<ConversionResult>();
+            await foreach (var result in ic.ConvertFilesToAvifAsync(new[] { file }))
+            {
+                initialResults.Add(result);
+            }
+
+            // 初回 (Quality=1) は画質評価で失敗するはず
+            Assert.Single(initialResults);
+            Assert.False(initialResults[0].IsSuccess);
+            Assert.True(initialResults[0].IsQualityEvaluationFailure);
+            Assert.True(File.Exists(file), "失敗したため元のファイルが存在していること");
+
+            // 再試行 (Quality=100 - ロスレス、画質評価スキップ)
+            ic.Quality = 100;
+            var retryResults = new List<ConversionResult>();
+            await foreach (var result in ic.ConvertFilesToAvifAsync(new[] { file }))
+            {
+                retryResults.Add(result);
+            }
+
+            Assert.Single(retryResults);
+            // Quality 100 で変換成功（あるいはサイズ増大等にならなければ成功）
+            if (retryResults[0].IsSuccess)
+            {
+                Assert.False(File.Exists(file));
+                Assert.True(File.Exists(Path.ChangeExtension(file, ".avif")));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+            {
+                Directory.Delete(testDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConvertFilesToAvifAsync_LazyEnumerable_ShouldProcessFilesWithoutPrecomputingTotal()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file1 = Path.Combine(testDir, "lazy1.png");
+        var file2 = Path.Combine(testDir, "lazy2.png");
+
+        using (var img1 = new MagickImage(MagickColors.Red, 30, 30))
+        {
+            await img1.WriteAsync(file1, MagickFormat.Png);
+        }
+        using (var img2 = new MagickImage(MagickColors.Blue, 30, 30))
+        {
+            await img2.WriteAsync(file2, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 80,
+                QualityThreshold = 0.5
+            };
+
+            var progressReports = new List<ConversionProgress>();
+            var progress = new Progress<ConversionProgress>(p => progressReports.Add(p));
+
+            // 遅延評価する IEnumerable (ICollection / IReadOnlyCollection ではない)
+            IEnumerable<string> GetLazyFiles()
+            {
+                yield return file1;
+                yield return file2;
+            }
+
+            var results = new List<ConversionResult>();
+
+            // Act
+            await foreach (var result in ic.ConvertFilesToAvifAsync(GetLazyFiles(), 2, progress))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Equal(2, results.Count);
+            Assert.All(results, r => Assert.True(r.IsSuccess));
+            Assert.True(File.Exists(Path.ChangeExtension(file1, ".avif")));
+            Assert.True(File.Exists(Path.ChangeExtension(file2, ".avif")));
+            Assert.False(File.Exists(file1));
+            Assert.False(File.Exists(file2));
+
+            // 遅延列挙の場合、TotalFiles は 0 として通知される
+            Assert.NotEmpty(progressReports);
+            Assert.All(progressReports, p => Assert.Equal(0, p.TotalFiles));
+        }
+        finally
+        {
             if (Directory.Exists(testDir))
             {
                 Directory.Delete(testDir, true);

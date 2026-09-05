@@ -19,7 +19,16 @@ public record ConversionProgress(
 /// <summary>
 ///     変換結果を表します。
 /// </summary>
-public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage);
+public record ConversionResult(string InputPath, bool IsSuccess, string? ErrorMessage)
+{
+    /// <summary>
+    /// 画質評価（SSIM / SSIMULACRA2）による失敗かどうかを判定します。
+    /// </summary>
+    public bool IsQualityEvaluationFailure =>
+        !IsSuccess && !string.IsNullOrEmpty(ErrorMessage) &&
+        (ErrorMessage.StartsWith("SSIM too low", StringComparison.OrdinalIgnoreCase) ||
+         ErrorMessage.StartsWith("SSIMULACRA2 too low", StringComparison.OrdinalIgnoreCase));
+}
 
 /// <summary>
 ///     変換エンジンの種類を表します。
@@ -414,22 +423,25 @@ public partial class ImageConverter
     }
 
     /// <summary>
-    ///     指定したフォルダ内の画像をAVIF形式に一括変換します。
+    ///     指定したファイル群をAVIF形式に一括変換します。
     /// </summary>
-    /// <param name="directoryPath">対象フォルダのパス</param>
-    /// <param name="extensions">対象とする拡張子 (例: ".jpg", ".png")</param>
+    /// <param name="filesToProcess">変換対象のファイルパス一覧</param>
     /// <param name="maxDegreeOfParallelism">並列実行数</param>
     /// <param name="progress">進捗通知用の IProgress インターフェース</param>
     /// <param name="ct">キャンセル申告</param>
     /// <returns>変換結果の非同期ストリーム</returns>
-    public async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
-        string directoryPath,
-        string[] extensions,
+    public async IAsyncEnumerable<ConversionResult> ConvertFilesToAvifAsync(
+        IEnumerable<string> filesToProcess,
         int maxDegreeOfParallelism = 4,
         IProgress<ConversionProgress>? progress = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var totalFiles = 0;
+        var totalFiles = filesToProcess switch
+        {
+            IReadOnlyCollection<string> roc => roc.Count,
+            ICollection<string> col => col.Count,
+            _ => 0
+        };
         var processedCount = 0;
         var successCount = 0;
         var failedCount = 0;
@@ -439,20 +451,20 @@ public partial class ImageConverter
         var resultChannel = Channel.CreateUnbounded<ConversionResult>(new UnboundedChannelOptions
             { SingleReader = true, SingleWriter = false });
 
-        // 探索ステージ (先に全ファイルをリストアップして総数を確定)
-        var filesToProcess = Directory.EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories)
-            .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-            .ToList();
-        totalFiles = filesToProcess.Count;
-
         var producerTask = Task.Run(async () =>
         {
-            foreach (var file in filesToProcess)
+            try
             {
-                await fileChannel.Writer.WriteAsync(file, ct).ConfigureAwait(false);
+                foreach (var file in filesToProcess)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    await fileChannel.Writer.WriteAsync(file, ct).ConfigureAwait(false);
+                }
             }
-
-            fileChannel.Writer.Complete();
+            finally
+            {
+                fileChannel.Writer.Complete();
+            }
         }, ct);
 
         // 変換・検証ステージ
@@ -481,6 +493,32 @@ public partial class ImageConverter
         }
 
         await producerTask.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     指定したフォルダ内の画像をAVIF形式に一括変換します。
+    /// </summary>
+    /// <param name="directoryPath">対象フォルダのパス</param>
+    /// <param name="extensions">対象とする拡張子 (例: ".jpg", ".png")</param>
+    /// <param name="maxDegreeOfParallelism">並列実行数</param>
+    /// <param name="progress">進捗通知用の IProgress インターフェース</param>
+    /// <param name="ct">キャンセル申告</param>
+    /// <returns>変換結果の非同期ストリーム</returns>
+    public async IAsyncEnumerable<ConversionResult> ConvertDirectoryToAvifAsync(
+        string directoryPath,
+        string[] extensions,
+        int maxDegreeOfParallelism = 4,
+        IProgress<ConversionProgress>? progress = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        // 探索ステージ (非同期に列挙しながら順次変換)
+        var filesToProcess = Directory.EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories)
+            .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+
+        await foreach (var result in ConvertFilesToAvifAsync(filesToProcess, maxDegreeOfParallelism, progress, ct).ConfigureAwait(false))
+        {
+            yield return result;
+        }
     }
 
     private ConversionResult ProcessFile(string inputPath,

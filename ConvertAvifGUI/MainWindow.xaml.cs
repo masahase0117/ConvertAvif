@@ -136,6 +136,36 @@ public partial class MainWindow
         }
     }
 
+    private void ConfigureConverter(uint quality, double threshold, uint speed)
+    {
+        _converter.Quality = quality;
+        _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
+        _converter.AvifEncPath = AvifEncPathTextBox.Text;
+        _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
+        _converter.AvifEncPriority = PriorityComboBox.SelectedIndex switch
+        {
+            0 => ProcessPriorityClass.Idle,
+            1 => ProcessPriorityClass.BelowNormal,
+            2 => ProcessPriorityClass.Normal,
+            3 => ProcessPriorityClass.AboveNormal,
+            4 => ProcessPriorityClass.High,
+            5 => ProcessPriorityClass.RealTime,
+            _ => ProcessPriorityClass.Idle
+        };
+        _converter.EvaluationMode = Enum.TryParse<QualityEvaluationMode>(EvaluationModeComboBox.Text, out var evalMode) ? evalMode : QualityEvaluationMode.SSIM;
+        _converter.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
+        _converter.QualityThreshold = threshold;
+        _converter.Speed = speed;
+        if (quality != 100)
+        {
+            _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text + " -a tune=" + TuneComboBox.Text;
+            if (SharpYuvCheckBox.IsChecked == true)
+            {
+                _converter.AvifEncCustomOptions += " --sharpyuv";
+            }
+        }
+    }
+
     private async void ConvertButton_Click(object sender, RoutedEventArgs e)
     {
         var sourceDir = SourceDirTextBox.Text;
@@ -161,40 +191,22 @@ public partial class MainWindow
             if (!int.TryParse(ParallelTextBox.Text, out var maxParallelism)) maxParallelism = 4;
             if (!uint.TryParse(SpeedTextBox.Text, out var speed)) speed = 3;
 
-            _converter.Quality = _settings.Quality;
-            _converter.ConversionEngine = Enum.TryParse<AvifConversionEngine>(EngineComboBox.Text, out var engine) ? engine : AvifConversionEngine.Magick;
-            _converter.AvifEncPath = AvifEncPathTextBox.Text;
-            _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text;
-            _converter.AvifEncPriority = PriorityComboBox.SelectedIndex switch
-            {
-                0 => ProcessPriorityClass.Idle,
-                1 => ProcessPriorityClass.BelowNormal,
-                2 => ProcessPriorityClass.Normal,
-                3 => ProcessPriorityClass.AboveNormal,
-                4 => ProcessPriorityClass.High,
-                5 => ProcessPriorityClass.RealTime,
-                _ => ProcessPriorityClass.Idle
-            };
-            _converter.EvaluationMode = Enum.TryParse<QualityEvaluationMode>(EvaluationModeComboBox.Text, out var evalMode) ? evalMode : QualityEvaluationMode.SSIM;
-            _converter.Ssimulacra2Path = Ssimulacra2PathTextBox.Text;
-            _converter.QualityThreshold = threshold;
-            _converter.Speed = speed;
-            if (_settings.Quality != 100)
-            {
-                _converter.AvifEncCustomOptions = AvifEncOptionsTextBox.Text + " -a tune=" + TuneComboBox.Text;
-                if (SharpYuvCheckBox.IsChecked == true)
-                {
-                    _converter.AvifEncCustomOptions += " --sharpyuv";
-                }
-            }
-
+            ConfigureConverter(_settings.Quality, threshold, speed);
 
             var progress = new Progress<ConversionProgress>(p =>
             {
-                ConversionProgressBar.IsIndeterminate = false;
-                ConversionProgressBar.Maximum = p.TotalFiles;
-                ConversionProgressBar.Value = p.ProcessedFiles;
-                StatusTextBlock.Text = $"進行中: {p.ProcessedFiles} / {p.TotalFiles} (失敗: {p.FailedFiles})";
+                if (p.TotalFiles > 0)
+                {
+                    ConversionProgressBar.IsIndeterminate = false;
+                    ConversionProgressBar.Maximum = p.TotalFiles;
+                    ConversionProgressBar.Value = p.ProcessedFiles;
+                    StatusTextBlock.Text = $"進行中: {p.ProcessedFiles} / {p.TotalFiles} (失敗: {p.FailedFiles})";
+                }
+                else
+                {
+                    ConversionProgressBar.IsIndeterminate = true;
+                    StatusTextBlock.Text = $"進行中: {p.ProcessedFiles} 件処理 (失敗: {p.FailedFiles})";
+                }
             });
 
             await foreach (var result in _converter.ConvertDirectoryToAvifAsync(
@@ -231,6 +243,113 @@ public partial class MainWindow
         }
     }
 
+    private async void ContinuousConvertButton_Click(object sender, RoutedEventArgs e)
+    {
+        var sourceDir = SourceDirTextBox.Text;
+        if (!Directory.Exists(sourceDir))
+        {
+            MessageBox.Show("有効なソースディレクトリを選択してください。");
+            return;
+        }
+
+        SaveSettings();
+        _failures.Clear();
+        _cts = new CancellationTokenSource();
+
+        SetUiState(true);
+        StatusTextBlock.Text = "スキャン中...";
+        ConversionProgressBar.Value = 0;
+        ConversionProgressBar.IsIndeterminate = true;
+
+        try
+        {
+            var extensions = ExtensionsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (!double.TryParse(SsimTextBox.Text, out var threshold)) threshold = 0.9;
+            if (!int.TryParse(ParallelTextBox.Text, out var maxParallelism)) maxParallelism = 4;
+            if (!uint.TryParse(SpeedTextBox.Text, out var speed)) speed = 3;
+
+            var currentQuality = _settings.Quality;
+
+            var targetFiles = Directory.EnumerateFiles(sourceDir, "*.*", SearchOption.AllDirectories)
+                .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            var persistentFailures = new List<ConversionResult>();
+
+            while (targetFiles.Count > 0)
+            {
+                QualitySlider.Value = currentQuality;
+                ConfigureConverter(currentQuality, threshold, speed);
+
+                var qualityFailures = new List<ConversionResult>();
+
+                var progress = new Progress<ConversionProgress>(p =>
+                {
+                    ConversionProgressBar.IsIndeterminate = false;
+                    ConversionProgressBar.Maximum = p.TotalFiles;
+                    ConversionProgressBar.Value = p.ProcessedFiles;
+                    StatusTextBlock.Text = $"Quality {currentQuality} で変換中: {p.ProcessedFiles} / {p.TotalFiles} (失敗: {p.FailedFiles})";
+                });
+
+                await foreach (var result in _converter.ConvertFilesToAvifAsync(
+                    targetFiles,
+                    maxParallelism,
+                    progress,
+                    _cts.Token))
+                {
+                    if (!result.IsSuccess)
+                    {
+                        if (result.IsQualityEvaluationFailure)
+                        {
+                            qualityFailures.Add(result);
+                        }
+                        else
+                        {
+                            persistentFailures.Add(result);
+                        }
+                    }
+                }
+
+                _failures.Clear();
+                foreach (var failure in persistentFailures)
+                {
+                    _failures.Add(failure);
+                }
+                foreach (var failure in qualityFailures)
+                {
+                    _failures.Add(failure);
+                }
+
+                if (qualityFailures.Count == 0 || currentQuality >= 100)
+                {
+                    break;
+                }
+
+                currentQuality = Math.Min(100, currentQuality + 5);
+                targetFiles = qualityFailures.Select(f => f.InputPath).ToList();
+            }
+
+            StatusTextBlock.Text = $"連続変換完了(失敗: {_failures.Count})";
+            MessageBox.Show(this, $"連続変換が完了しました。(失敗: {_failures.Count})");
+        }
+        catch (OperationCanceledException)
+        {
+            StatusTextBlock.Text = "キャンセルされました";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"エラーが発生しました: {ex.Message}");
+            StatusTextBlock.Text = "エラー発生";
+        }
+        finally
+        {
+            ConversionProgressBar.IsIndeterminate = false;
+            SetUiState(false);
+            _cts.Dispose();
+            _cts = null;
+        }
+    }
+
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         _cts?.Cancel();
@@ -245,6 +364,7 @@ public partial class MainWindow
     private void SetUiState(bool isRunning)
     {
         ConvertButton.IsEnabled = !isRunning;
+        ContinuousConvertButton.IsEnabled = !isRunning;
         CancelButton.IsEnabled = isRunning;
         SourceDirTextBox.IsEnabled = !isRunning;
         BrowseButton.IsEnabled = !isRunning;

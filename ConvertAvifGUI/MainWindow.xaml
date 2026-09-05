@@ -140,6 +140,7 @@
         <!-- Actions -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
             <Button x:Name="ConvertButton" Content="変換開始" Width="100" Padding="5" Margin="0,0,10,0" Click="ConvertButton_Click"/>
+            <Button x:Name="ContinuousConvertButton" Content="連続変換" Width="100" Padding="5" Margin="0,0,10,0" Click="ContinuousConvertButton_Click"/>
             <Button x:Name="CancelButton" Content="キャンセル" Width="100" Padding="5" IsEnabled="False" Click="CancelButton_Click"/>
         </StackPanel>
 

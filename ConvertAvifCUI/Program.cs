@@ -138,7 +138,8 @@ static class Program
             var progress = new Progress<ConversionProgress>(p =>
             {
                 // シンプルな進捗表示
-                Console.Write($"\r進捗: {p.ProcessedFiles}/{p.TotalFiles} (成功: {p.SuccessfulFiles}, 失敗: {p.FailedFiles}) 現在: {Path.GetFileName(p.CurrentFile)}".PadRight(Console.WindowWidth - 1));
+                var totalStr = p.TotalFiles > 0 ? p.TotalFiles.ToString() : "?";
+                Console.Write($"\r進捗: {p.ProcessedFiles}/{totalStr} (成功: {p.SuccessfulFiles}, 失敗: {p.FailedFiles}) 現在: {Path.GetFileName(p.CurrentFile)}".PadRight(Console.WindowWidth - 1));
             });
 
             await foreach (var result in converter.ConvertDirectoryToAvifAsync(
