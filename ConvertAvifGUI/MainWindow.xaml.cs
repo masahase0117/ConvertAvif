@@ -211,7 +211,7 @@ public partial class MainWindow
             }
 
             StatusTextBlock.Text = "変換完了";
-            MessageBox.Show("変換が完了しました。");
+            MessageBox.Show(this, "変換が完了しました。");
         }
         catch (OperationCanceledException)
         {
@@ -219,7 +219,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"エラーが発生しました: {ex.Message}");
+            MessageBox.Show(this, $"エラーが発生しました: {ex.Message}");
             StatusTextBlock.Text = "エラー発生";
         }
         finally
