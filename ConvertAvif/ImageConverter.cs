@@ -260,6 +260,7 @@ public partial class ImageConverter
 
         var version = GetAvifEncVersion(AvifEncPath);
         var arguments = BuildAvifEncArguments(version, inputPath, outputPath);
+        Debug.WriteLine($"avifenc arguments: {arguments}");
 
         var startInfo = new ProcessStartInfo
         {
@@ -368,9 +369,9 @@ public partial class ImageConverter
         }
 
         // Color Space / YUV Format
-        if (!string.IsNullOrWhiteSpace(ColorSpace))
+        if (!string.IsNullOrWhiteSpace(ColorSpace) && Quality < 100)
         {
-            if (Quality < 100 || isGrayscale || ColorSpace.Contains("444") || ColorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("sRGB", StringComparison.OrdinalIgnoreCase))
+            if (isGrayscale || ColorSpace.Contains("444") || ColorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) || ColorSpace.Equals("sRGB", StringComparison.OrdinalIgnoreCase))
             {
                 args.Add("-y");
                 if (ColorSpace.Equals("YV12", StringComparison.OrdinalIgnoreCase))
@@ -396,7 +397,7 @@ public partial class ImageConverter
                 }
             }
         }
-        else if (isGrayscale)
+        else if (isGrayscale &&  Quality < 100)
         {
             args.Add("-y");
             args.Add("400");
