@@ -456,11 +456,21 @@ public partial class ImageConverter
         {
             try
             {
+                var discoveredCount = 0;
                 foreach (var file in filesToProcess)
                 {
                     ct.ThrowIfCancellationRequested();
+                    discoveredCount++;
                     await fileChannel.Writer.WriteAsync(file, ct).ConfigureAwait(false);
                 }
+
+                Volatile.Write(ref totalFiles, discoveredCount);
+                progress?.Report(new ConversionProgress(
+                    discoveredCount,
+                    Volatile.Read(ref processedCount),
+                    Volatile.Read(ref successCount),
+                    Volatile.Read(ref failedCount),
+                    string.Empty));
             }
             finally
             {
@@ -483,11 +493,16 @@ public partial class ImageConverter
         // 結果集約ステージ (IAsyncEnumerableとして yield return する)
         await foreach (var result in resultChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
-            processedCount++;
-            if (result.IsSuccess) successCount++;
-            else failedCount++;
+            Interlocked.Increment(ref processedCount);
+            if (result.IsSuccess) Interlocked.Increment(ref successCount);
+            else Interlocked.Increment(ref failedCount);
 
-            progress?.Report(new ConversionProgress(totalFiles, processedCount, successCount, failedCount,
+            var currentTotal = Volatile.Read(ref totalFiles);
+            progress?.Report(new ConversionProgress(
+                currentTotal,
+                Volatile.Read(ref processedCount),
+                Volatile.Read(ref successCount),
+                Volatile.Read(ref failedCount),
                 result.InputPath));
 
             yield return result;

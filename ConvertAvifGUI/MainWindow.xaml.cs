@@ -200,7 +200,8 @@ public partial class MainWindow
                     ConversionProgressBar.IsIndeterminate = false;
                     ConversionProgressBar.Maximum = p.TotalFiles;
                     ConversionProgressBar.Value = p.ProcessedFiles;
-                    StatusTextBlock.Text = $"進行中: {p.ProcessedFiles} / {p.TotalFiles} (失敗: {p.FailedFiles})";
+                    var percent = (double)p.ProcessedFiles / p.TotalFiles * 100;
+                    StatusTextBlock.Text = $"進行中: {p.ProcessedFiles} / {p.TotalFiles} ({percent:F1}%) (失敗: {p.FailedFiles})";
                 }
                 else
                 {
@@ -285,10 +286,19 @@ public partial class MainWindow
 
                 var progress = new Progress<ConversionProgress>(p =>
                 {
-                    ConversionProgressBar.IsIndeterminate = false;
-                    ConversionProgressBar.Maximum = p.TotalFiles;
-                    ConversionProgressBar.Value = p.ProcessedFiles;
-                    StatusTextBlock.Text = $"Quality {currentQuality} で変換中: {p.ProcessedFiles} / {p.TotalFiles} (失敗: {p.FailedFiles})";
+                    if (p.TotalFiles > 0)
+                    {
+                        ConversionProgressBar.IsIndeterminate = false;
+                        ConversionProgressBar.Maximum = p.TotalFiles;
+                        ConversionProgressBar.Value = p.ProcessedFiles;
+                        var percent = (double)p.ProcessedFiles / p.TotalFiles * 100;
+                        StatusTextBlock.Text = $"Quality {currentQuality} で変換中: {p.ProcessedFiles} / {p.TotalFiles} ({percent:F1}%) (失敗: {p.FailedFiles})";
+                    }
+                    else
+                    {
+                        ConversionProgressBar.IsIndeterminate = true;
+                        StatusTextBlock.Text = $"Quality {currentQuality} で変換中: {p.ProcessedFiles} 件処理 (失敗: {p.FailedFiles})";
+                    }
                 });
 
                 await foreach (var result in _converter.ConvertFilesToAvifAsync(

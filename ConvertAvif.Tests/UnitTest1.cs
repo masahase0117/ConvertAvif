@@ -1067,7 +1067,14 @@ public class ImageConverterTests
             };
 
             var progressReports = new List<ConversionProgress>();
-            var progress = new Progress<ConversionProgress>(p => progressReports.Add(p));
+            var lockObj = new object();
+            var progress = new SynchronousProgress<ConversionProgress>(p =>
+            {
+                lock (lockObj)
+                {
+                    progressReports.Add(p);
+                }
+            });
 
             // 遅延評価する IEnumerable (ICollection / IReadOnlyCollection ではない)
             IEnumerable<string> GetLazyFiles()
@@ -1092,9 +1099,9 @@ public class ImageConverterTests
             Assert.False(File.Exists(file1));
             Assert.False(File.Exists(file2));
 
-            // 遅延列挙の場合、TotalFiles は 0 として通知される
+            // リストアップ完了後は TotalFiles が確定して通知される
             Assert.NotEmpty(progressReports);
-            Assert.All(progressReports, p => Assert.Equal(0, p.TotalFiles));
+            Assert.Contains(progressReports, p => p.TotalFiles == 2);
         }
         finally
         {
@@ -1103,5 +1110,80 @@ public class ImageConverterTests
                 Directory.Delete(testDir, true);
             }
         }
+    }
+
+    [Fact]
+    public async Task ConvertFilesToAvifAsync_ListingFinishedBeforeConversion_ShouldReportTotalFiles()
+    {
+        // Arrange
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(testDir);
+        var file1 = Path.Combine(testDir, "list1.png");
+        var file2 = Path.Combine(testDir, "list2.png");
+        var file3 = Path.Combine(testDir, "list3.png");
+
+        using (var img = new MagickImage(MagickColors.White, 20, 20))
+        {
+            await img.WriteAsync(file1, MagickFormat.Png);
+            await img.WriteAsync(file2, MagickFormat.Png);
+            await img.WriteAsync(file3, MagickFormat.Png);
+        }
+
+        try
+        {
+            var ic = new ImageConverter
+            {
+                Quality = 80,
+                QualityThreshold = 0.5
+            };
+
+            var progressReports = new List<ConversionProgress>();
+            var lockObj = new object();
+            var progress = new SynchronousProgress<ConversionProgress>(p =>
+            {
+                lock (lockObj)
+                {
+                    progressReports.Add(p);
+                }
+            });
+
+            IEnumerable<string> GetLazyFiles()
+            {
+                yield return file1;
+                yield return file2;
+                yield return file3;
+            }
+
+            var results = new List<ConversionResult>();
+
+            // Act
+            await foreach (var result in ic.ConvertFilesToAvifAsync(GetLazyFiles(), 2, progress))
+            {
+                results.Add(result);
+            }
+
+            // Assert
+            Assert.Equal(3, results.Count);
+            Assert.NotEmpty(progressReports);
+
+            // リストアップ完了時の通知または各ファイル完了時の通知でTotalFilesが3になっていること
+            var finalReport = progressReports.Last();
+            Assert.Equal(3, finalReport.TotalFiles);
+            Assert.Equal(3, finalReport.ProcessedFiles);
+            Assert.Equal(3, finalReport.SuccessfulFiles);
+            Assert.Equal(0, finalReport.FailedFiles);
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+            {
+                Directory.Delete(testDir, true);
+            }
+        }
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
     }
 }

@@ -139,7 +139,17 @@ static class Program
             {
                 // シンプルな進捗表示
                 var totalStr = p.TotalFiles > 0 ? p.TotalFiles.ToString() : "?";
-                Console.Write($"\r進捗: {p.ProcessedFiles}/{totalStr} (成功: {p.SuccessfulFiles}, 失敗: {p.FailedFiles}) 現在: {Path.GetFileName(p.CurrentFile)}".PadRight(Console.WindowWidth - 1));
+                var percentStr = p.TotalFiles > 0 ? $" ({(double)p.ProcessedFiles / p.TotalFiles * 100:F1}%)" : "";
+                var currentFileName = string.IsNullOrEmpty(p.CurrentFile) ? "" : $" 現在: {Path.GetFileName(p.CurrentFile)}";
+                var msg = $"\r進捗: {p.ProcessedFiles}/{totalStr}{percentStr} (成功: {p.SuccessfulFiles}, 失敗: {p.FailedFiles}){currentFileName}";
+                try
+                {
+                    Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                }
+                catch
+                {
+                    Console.Write(msg);
+                }
             });
 
             await foreach (var result in converter.ConvertDirectoryToAvifAsync(
