@@ -675,6 +675,19 @@ public partial class ImageConverter
             }
             compareOriginalPath = tmpOriginalPath;
         }
+        else if (IsGrayscalePngWithIcc(originalPath, originalImage))
+        {
+            // ICCプロファイル付きのグレイスケールPNGはssimulacra2で拒否されるためICCプロファイルを削除した一時PNGを作成する
+            tmpOriginalPath = Path.Combine(Path.GetTempPath(), $"tmp_orig_{Guid.NewGuid():N}.png");
+            using (var origImg = originalImage.Clone())
+            {
+                origImg.RemoveProfile("icc");
+                origImg.RemoveProfile("icm");
+                origImg.Format = MagickFormat.Png;
+                origImg.Write(tmpOriginalPath);
+            }
+            compareOriginalPath = tmpOriginalPath;
+        }
 
         var psi = new ProcessStartInfo
         {
@@ -711,6 +724,30 @@ public partial class ImageConverter
                 DeleteOutputFile(tmpOriginalPath);
             }
         }
+    }
+
+    /// <summary>
+    ///     画像がICCプロファイル付きのグレイスケールPNG画像であるかを判定します。
+    /// </summary>
+    /// <param name="filePath">画像のファイルパス</param>
+    /// <param name="image">判定対象の画像</param>
+    /// <returns>ICCプロファイル付きのグレイスケールPNG画像の場合は true</returns>
+    private static bool IsGrayscalePngWithIcc(string filePath, MagickImage image)
+    {
+        var isPng = image.Format is MagickFormat.Png or MagickFormat.Png8 or MagickFormat.Png24 or MagickFormat.Png32 or MagickFormat.Png48 or MagickFormat.Png64 ||
+                    filePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+
+        if (!isPng)
+            return false;
+
+        if (!IsGrayscaleImage(image))
+            return false;
+
+        var hasIccProfile = image.GetColorProfile() != null ||
+                            image.GetProfile("icc") != null ||
+                            image.GetProfile("icm") != null;
+
+        return hasIccProfile;
     }
 
     /// <summary>
