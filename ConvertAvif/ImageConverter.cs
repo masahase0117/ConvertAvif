@@ -600,7 +600,7 @@ public partial class ImageConverter
                 {
                     if (EvaluationMode == QualityEvaluationMode.Ssimulacra2)
                     {
-                        var score = GetSsimulacra2Score(inputPath, converted);
+                        var score = GetSsimulacra2Score(inputPath, original, converted);
                         if (score < QualityThreshold)
                         {
                             validationError = $"SSIMULACRA2 too low: {score:F4} (Threshold: {QualityThreshold})";
@@ -646,23 +646,40 @@ public partial class ImageConverter
         }
     }
 
-    private double GetSsimulacra2Score(string originalPath, MagickImage convertedImage)
+    private double GetSsimulacra2Score(string originalPath, MagickImage originalImage, MagickImage convertedImage)
     {
         var exePath = Ssimulacra2Path ?? "ssimulacra2.exe";
-        var tmpPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
+        var tmpConvertedPath = Path.Combine(Path.GetTempPath(), $"tmp_{Guid.NewGuid():N}.png");
+        string? tmpOriginalPath = null;
         using (var img = convertedImage.Clone())
         {
             img.ColorSpace = ImageMagick.ColorSpace.sRGB; // 色空間を sRGB に強制変換
             img.Alpha(AlphaOption.Remove); // アルファチャンネルを削除
             img.RemoveProfile("icc"); // ICC プロファイルを除去（必要なら有効化）
             img.Format = MagickFormat.Png;
-            img.Write(tmpPath);
+            img.Write(tmpConvertedPath);
+        }
+
+        // CMYKかつICCプロファイル付きのJPGの場合、ssimulacra2がデコードできないため事前にPNGへ変換する
+        var compareOriginalPath = originalPath;
+        if (IsCmykJpg(originalPath, originalImage))
+        {
+            tmpOriginalPath = Path.Combine(Path.GetTempPath(), $"tmp_orig_{Guid.NewGuid():N}.png");
+            using (var origImg = originalImage.Clone())
+            {
+                origImg.ColorSpace = ImageMagick.ColorSpace.sRGB;
+                origImg.Alpha(AlphaOption.Remove);
+                origImg.RemoveProfile("icc");
+                origImg.Format = MagickFormat.Png;
+                origImg.Write(tmpOriginalPath);
+            }
+            compareOriginalPath = tmpOriginalPath;
         }
 
         var psi = new ProcessStartInfo
         {
             FileName = exePath,
-            Arguments = $"\"{originalPath}\" \"{tmpPath}\"",
+            Arguments = $"\"{compareOriginalPath}\" \"{tmpConvertedPath}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -688,8 +705,33 @@ public partial class ImageConverter
         }
         finally
         {
-            DeleteOutputFile(tmpPath);
+            DeleteOutputFile(tmpConvertedPath);
+            if (tmpOriginalPath != null)
+            {
+                DeleteOutputFile(tmpOriginalPath);
+            }
         }
+    }
+
+    /// <summary>
+    ///     画像がCMYKのJPG画像であるかを判定します。
+    /// </summary>
+    /// <param name="filePath">画像のファイルパス</param>
+    /// <param name="image">判定対象の画像</param>
+    /// <returns>CMYKのJPG画像の場合は true</returns>
+    private static bool IsCmykJpg(string filePath, MagickImage image)
+    {
+        var isJpg = image.Format is MagickFormat.Jpg or MagickFormat.Jpeg or MagickFormat.Jpe ||
+                    filePath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    filePath.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase);
+
+        if (!isJpg)
+            return false;
+
+        var isCmyk = image.ColorSpace is ImageMagick.ColorSpace.CMYK ||
+                     image.ColorType is ColorType.ColorSeparation or ColorType.ColorSeparationAlpha;
+
+        return isCmyk;
     }
 
     /// <summary>

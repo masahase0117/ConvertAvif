@@ -139,6 +139,115 @@ public class Ssimulacra2Test : IDisposable
         }
     }
 
+    [Fact]
+    public async Task ProcessFile_Ssimulacra2_CmykJpg_ShouldConvertOriginalToPngBeforeComparison()
+    {
+        // Arrange
+        // ssimulacra2のモックを作成: 第1引数（元画像）がPNG拡張子なら0.95を出力して正常終了、JPGなら異常終了(exit code 1)
+        var mockBat = Path.Combine(_tempDir, "ssimulacra2_cmyk_check.bat");
+        File.WriteAllText(mockBat, @"@echo off
+if /I ""%~x1""=="" .png"" (
+    echo 0.95
+    exit /b 0
+)
+if /I ""%~x1""=="" .jpg"" (
+    echo CMYK JPEG decode error 1>&2
+    exit /b 1
+)
+if /I ""%~x1""=="".png"" (
+    echo 0.95
+    exit /b 0
+)
+if /I ""%~x1""=="".jpg"" (
+    echo CMYK JPEG decode error 1>&2
+    exit /b 1
+)
+echo 0.95
+exit /b 0
+");
+
+        var inputPath = Path.Combine(_tempDir, "test_cmyk.jpg");
+        using (var img = new MagickImage(MagickColors.Cyan, 50, 50))
+        {
+            img.ColorSpace = ColorSpace.CMYK;
+            await img.WriteAsync(inputPath, MagickFormat.Jpg);
+        }
+
+        using (var check = new MagickImage(inputPath))
+        {
+            Assert.Equal(MagickFormat.Jpeg, check.Format);
+            Assert.Equal(ColorSpace.CMYK, check.ColorSpace);
+        }
+
+        var ic = new ImageConverter
+        {
+            EvaluationMode = QualityEvaluationMode.Ssimulacra2,
+            Ssimulacra2Path = mockBat,
+            QualityThreshold = 0.9,
+            Quality = 90
+        };
+
+        // Act
+        var results = new List<ConversionResult>();
+        await foreach (var result in ic.ConvertDirectoryToAvifAsync(_tempDir, new[] { ".jpg" }))
+        {
+            results.Add(result);
+        }
+
+        // Assert
+        Assert.Single(results);
+        Assert.True(results[0].IsSuccess, results[0].ErrorMessage);
+        Assert.False(File.Exists(inputPath));
+        Assert.True(File.Exists(Path.ChangeExtension(inputPath, ".avif")));
+    }
+
+    [Fact]
+    public async Task ProcessFile_Ssimulacra2_RgbJpg_ShouldPassOriginalJpgDirectly()
+    {
+        // Arrange
+        // ssimulacra2のモックを作成: 第1引数（元画像）がJPG拡張子なら0.95を出力、PNGの場合は異常終了
+        var mockBat = Path.Combine(_tempDir, "ssimulacra2_rgb_check.bat");
+        File.WriteAllText(mockBat, @"@echo off
+if /I ""%~x1""=="".jpg"" (
+    echo 0.95
+    exit /b 0
+)
+if /I ""%~x1""=="" .jpg"" (
+    echo 0.95
+    exit /b 0
+)
+echo Original should be passed directly without PNG conversion 1>&2
+exit /b 1
+");
+
+        var inputPath = Path.Combine(_tempDir, "test_rgb.jpg");
+        using (var img = new MagickImage(MagickColors.Red, 50, 50))
+        {
+            await img.WriteAsync(inputPath, MagickFormat.Jpg);
+        }
+
+        var ic = new ImageConverter
+        {
+            EvaluationMode = QualityEvaluationMode.Ssimulacra2,
+            Ssimulacra2Path = mockBat,
+            QualityThreshold = 0.9,
+            Quality = 90
+        };
+
+        // Act
+        var results = new List<ConversionResult>();
+        await foreach (var result in ic.ConvertDirectoryToAvifAsync(_tempDir, new[] { ".jpg" }))
+        {
+            results.Add(result);
+        }
+
+        // Assert
+        Assert.Single(results);
+        Assert.True(results[0].IsSuccess, results[0].ErrorMessage);
+        Assert.False(File.Exists(inputPath));
+        Assert.True(File.Exists(Path.ChangeExtension(inputPath, ".avif")));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
