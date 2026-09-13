@@ -660,7 +660,7 @@ public partial class ImageConverter
             img.Write(tmpConvertedPath);
         }
 
-        // CMYKかつICCプロファイル付きのJPGの場合、ssimulacra2がデコードできないため事前にPNGへ変換する
+        // CMYKのJPGの場合、ssimulacra2がデコードできないため事前にPNGへ変換する
         var compareOriginalPath = originalPath;
         if (IsCmykJpg(originalPath, originalImage))
         {
