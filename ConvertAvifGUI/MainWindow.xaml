@@ -146,7 +146,26 @@
 
         <!-- Results / Failure List -->
         <GroupBox Grid.Row="5" Header="変換結果 / 失敗したファイル">
-            <ListView x:Name="FailureListView" GridViewColumnHeader.Click="GridViewColumnHeader_Click">
+            <ListView x:Name="FailureListView"
+                      GridViewColumnHeader.Click="GridViewColumnHeader_Click"
+                      MouseDoubleClick="FailureListView_MouseDoubleClick"
+                      KeyDown="FailureListView_KeyDown"
+                      ContextMenuOpening="FailureListView_ContextMenuOpening">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <EventSetter Event="PreviewMouseRightButtonDown" Handler="ListViewItem_PreviewMouseRightButtonDown"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ContextMenu>
+                    <ContextMenu x:Name="FailureListViewContextMenu">
+                        <MenuItem x:Name="OpenFileMenuItem" Header="ファイルを開く(_O)" Click="OpenFileMenuItem_Click" InputGestureText="Enter / ダブルクリック"/>
+                        <MenuItem x:Name="ShowInExplorerMenuItem" Header="エクスプローラーで表示(_E)" Click="ShowInExplorerMenuItem_Click"/>
+                        <Separator/>
+                        <MenuItem x:Name="CopyErrorMessageMenuItem" Header="エラーメッセージをコピー(_C)" Click="CopyErrorMessageMenuItem_Click" InputGestureText="Ctrl+C"/>
+                        <MenuItem x:Name="CopyFilePathMenuItem" Header="ファイルパスをコピー(_P)" Click="CopyFilePathMenuItem_Click"/>
+                        <MenuItem x:Name="CopyFullRowMenuItem" Header="行全体をコピー(_A)" Click="CopyFullRowMenuItem_Click"/>
+                    </ContextMenu>
+                </ListView.ContextMenu>
                 <ListView.View>
                     <GridView>
                         <GridViewColumn Header="ファイル名" DisplayMemberBinding="{Binding InputPath}" Width="400"/>

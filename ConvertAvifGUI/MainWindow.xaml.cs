@@ -9,6 +9,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace ConvertAvifGUI;
 
@@ -504,5 +506,223 @@ public partial class MainWindow
         {
             header.Column.Header = text[..^2];
         }
+    }
+
+    private void FailureListView_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var hasSelection = FailureListView.SelectedItems.Count > 0;
+        OpenFileMenuItem.IsEnabled = hasSelection;
+        ShowInExplorerMenuItem.IsEnabled = hasSelection;
+        CopyErrorMessageMenuItem.IsEnabled = hasSelection;
+        CopyFilePathMenuItem.IsEnabled = hasSelection;
+        CopyFullRowMenuItem.IsEnabled = hasSelection;
+    }
+
+    private void ListViewItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListViewItem item)
+        {
+            if (!item.IsSelected)
+            {
+                item.IsSelected = true;
+                item.Focus();
+            }
+        }
+    }
+
+    private void FailureListView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            OpenSelectedFiles();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            CopyErrorMessage();
+            e.Handled = true;
+        }
+    }
+
+    private void FailureListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListView && e.ChangedButton == MouseButton.Left)
+        {
+            var dependencyObject = e.OriginalSource as DependencyObject;
+            var listViewItem = FindVisualParent<ListViewItem>(dependencyObject);
+            if (listViewItem != null)
+            {
+                OpenSelectedFiles();
+            }
+        }
+    }
+
+    private void OpenFileMenuItem_Click(object sender, RoutedEventArgs e) => OpenSelectedFiles();
+    private void ShowInExplorerMenuItem_Click(object sender, RoutedEventArgs e) => ShowSelectedFilesInExplorer();
+    private void CopyErrorMessageMenuItem_Click(object sender, RoutedEventArgs e) => CopyErrorMessage();
+    private void CopyFilePathMenuItem_Click(object sender, RoutedEventArgs e) => CopyFilePath();
+    private void CopyFullRowMenuItem_Click(object sender, RoutedEventArgs e) => CopyFullRow();
+
+    /// <summary>
+    ///     選択された対象ファイルを開きます。
+    /// </summary>
+    private void OpenSelectedFiles()
+    {
+        var selected = FailureListView.SelectedItems.Cast<ConversionResult>().ToList();
+        if (selected.Count == 0) return;
+
+        foreach (var result in selected)
+        {
+            if (string.IsNullOrWhiteSpace(result.InputPath)) continue;
+
+            if (!File.Exists(result.InputPath))
+            {
+                MessageBox.Show(this, $"ファイルが見つかりません: {result.InputPath}", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                continue;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(result.InputPath)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"ファイルを開けませんでした ({result.InputPath}): {ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     選択された対象ファイルをエクスプローラーで表示します。
+    /// </summary>
+    private void ShowSelectedFilesInExplorer()
+    {
+        var selected = FailureListView.SelectedItems.Cast<ConversionResult>().ToList();
+        if (selected.Count == 0) return;
+
+        foreach (var result in selected)
+        {
+            if (string.IsNullOrWhiteSpace(result.InputPath)) continue;
+
+            try
+            {
+                if (File.Exists(result.InputPath))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{result.InputPath}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    var dir = Path.GetDirectoryName(result.InputPath);
+                    if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+                    {
+                        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"")
+                        {
+                            UseShellExecute = true
+                        });
+                    }
+                    else
+                    {
+                        MessageBox.Show(this, $"ファイルまたはフォルダが見つかりません: {result.InputPath}", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"エクスプローラーを開けませんでした ({result.InputPath}): {ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     選択された項目のエラーメッセージをクリップボードにコピーします。
+    /// </summary>
+    private void CopyErrorMessage()
+    {
+        var selected = FailureListView.SelectedItems.Cast<ConversionResult>().ToList();
+        if (selected.Count == 0) return;
+
+        var messages = selected
+            .Select(x => x.ErrorMessage ?? string.Empty)
+            .Where(x => !string.IsNullOrEmpty(x))
+            .ToList();
+
+        if (messages.Count > 0)
+        {
+            try
+            {
+                Clipboard.SetText(string.Join(Environment.NewLine, messages));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"クリップボードへのコピーに失敗しました: {ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     選択された項目のファイルパスをクリップボードにコピーします。
+    /// </summary>
+    private void CopyFilePath()
+    {
+        var selected = FailureListView.SelectedItems.Cast<ConversionResult>().ToList();
+        if (selected.Count == 0) return;
+
+        var paths = selected
+            .Select(x => x.InputPath)
+            .Where(x => !string.IsNullOrEmpty(x))
+            .ToList();
+
+        if (paths.Count > 0)
+        {
+            try
+            {
+                Clipboard.SetText(string.Join(Environment.NewLine, paths));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"クリップボードへのコピーに失敗しました: {ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     選択された項目の行情報（パス、成否、メッセージ）をクリップボードにコピーします。
+    /// </summary>
+    private void CopyFullRow()
+    {
+        var selected = FailureListView.SelectedItems.Cast<ConversionResult>().ToList();
+        if (selected.Count == 0) return;
+
+        var rows = selected
+            .Select(x => $"{x.InputPath}\t{(x.IsSuccess ? "成功" : "失敗")}\t{x.ErrorMessage}")
+            .ToList();
+
+        if (rows.Count > 0)
+        {
+            try
+            {
+                Clipboard.SetText(string.Join(Environment.NewLine, rows));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"クリップボードへのコピーに失敗しました: {ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent) return parent;
+            child = VisualTreeHelper.GetParent(child);
+        }
+        return null;
     }
 }
