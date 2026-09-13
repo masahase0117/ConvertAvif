@@ -675,7 +675,7 @@ public partial class ImageConverter
             }
             compareOriginalPath = tmpOriginalPath;
         }
-        else if (IsGrayscalePngWithIcc(originalPath, originalImage))
+        else if (IsGrayscaleImage(originalImage))
         {
             // ICCプロファイル付きのグレイスケールPNGはssimulacra2で拒否されるためICCプロファイルを削除した一時PNGを作成する
             tmpOriginalPath = Path.Combine(Path.GetTempPath(), $"tmp_orig_{Guid.NewGuid():N}.png");
