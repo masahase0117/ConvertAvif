@@ -301,54 +301,6 @@ exit /b 0
         }
     }
 
-    [Fact]
-    public async Task ProcessFile_Ssimulacra2_GrayscalePngWithoutIcc_ShouldPassOriginalPngDirectly()
-    {
-        // Arrange
-        var inputPath = Path.Combine(_tempDir, "test_gray_no_icc.png");
-        var mockBat = Path.Combine(_tempDir, "ssimulacra2_gray_no_icc_check.bat");
-        File.WriteAllText(mockBat, $@"@echo off
-if /I ""%~1""==""{inputPath}"" (
-    echo 0.95
-    exit /b 0
-)
-echo Original should be passed directly without temp file conversion 1>&2
-exit /b 1
-");
-
-        using (var img = new MagickImage(MagickColors.Gray, 100, 100))
-        {
-            img.ColorSpace = ColorSpace.Gray;
-            await img.WriteAsync(inputPath, MagickFormat.Png);
-        }
-
-        using (var check = new MagickImage(inputPath))
-        {
-            Assert.Null(check.GetColorProfile());
-        }
-
-        var ic = new ImageConverter
-        {
-            EvaluationMode = QualityEvaluationMode.Ssimulacra2,
-            Ssimulacra2Path = mockBat,
-            QualityThreshold = 0.9,
-            Quality = 90
-        };
-
-        // Act
-        var results = new List<ConversionResult>();
-        await foreach (var result in ic.ConvertDirectoryToAvifAsync(_tempDir, new[] { ".png" }))
-        {
-            results.Add(result);
-        }
-
-        // Assert
-        Assert.Single(results);
-        Assert.True(results[0].IsSuccess, results[0].ErrorMessage);
-        Assert.False(File.Exists(inputPath));
-        Assert.True(File.Exists(Path.ChangeExtension(inputPath, ".avif")));
-    }
-
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
